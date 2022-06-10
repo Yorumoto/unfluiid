@@ -132,7 +132,7 @@ class Main:
 
         try:
             self.focused_window_name = "the coolest wallpaper" if int(focused.name) else focused.name
-        except ValueError:
+        except (ValueError, TypeError):
             self.focused_window_name = (focused.name[0:40] + "...") if len(focused.name) >= 40 else focused.name
 
     def on_workspace_focus(self, _, new_workspace):

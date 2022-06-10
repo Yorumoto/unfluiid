@@ -1,10 +1,12 @@
-from re import L
 import common.context
+import time
 import psutil
+import netifaces
 import pytweening
 
 class Bar:
     _bar_width = 150
+    _default_bar_width = 150
 
     def __init__(self):
         self._x = None
@@ -20,14 +22,14 @@ class Bar:
         ctx.save()
         ctx.translate(x, 0)
         
-        new_width = self.main_draw(ctx, height)
+        new_width = self.main_draw(ctx, height, self._bar_width)
         
         if new_width is not None:
-            self._bar_width = new_width
+            self._bar_width = max(self._default_bar_width, new_width)
 
         ctx.restore()
 
-        return self._bar_width + 10
+        return self._bar_width + 5
     
     def collides(self, cx, cy):
         if self._x is None:
@@ -60,7 +62,7 @@ class PowerMain(Bar):
 
         self._vtt = max(min(self._vtt + (dt if self.collides(cx, cy) else -dt) * 5, 1), 0)
 
-    def main_draw(self, ctx, height):
+    def main_draw(self, ctx, height, width):
         ctx.set_source_rgba(0.4, 0.4, 0.4, 1)
 
         _vtt = pytweening.easeInOutQuad(self._vtt)
@@ -106,27 +108,66 @@ class MemoryMain(PowerMain):
         self.percentage_text = f"{(self.percentage * 100):.1f}% {((memory.used/1024)/1024)/1024:.1f}GB"
 
 
+#TODO: decorate time and network section
+
 class NetworkMain(Bar):
+    color = (17/255, 212/255, 17/255)
+
     def __init__(self):
+        
         self.update_stats(force_disconnected=True)
 
     def update_stats(self, force_disconnected=False):
         if force_disconnected:
-            self.link = "disconnected!!"
+            self.link = "disconnected"
             return
+       
 
-        connections = psutil.net_connections('inet')
-
-        if connections:
-            self.link = connections[0].laddr # i'm sorry openbsd users
+        for interface in ['enp0s25', 'eth0']:
+            try:
+                self.link = netifaces.ifaddresses(interface)[netifaces.AF_INET][0]['addr']
+                break
+            except (KeyError, ValueError):
+                pass
         else:
             self.update_stats(force_disconnected=True)
 
-    def draw(self, ctx, x, height):
-        return self._bar_width
 
-class TimeMain():
-    pass
+    def main_draw(self, ctx, height, width):
+        ctx.save()
+        ctx.set_source_rgba(*self.color, 1)
+        ctx.set_font_size(int(height * 0.5))
+        extents = ctx.text_extents(self.link)
+
+        ctx.translate((width * 0.5 - extents.width * 0.5), height * 0.7)
+
+        ctx.show_text(self.link)
+
+
+        ctx.restore()
+
+        return extents.width + 10
+
+class TimeMain(Bar):
+    def __init__(self):
+        self.update_stats()
+
+    def update_stats(self):
+        self.datetime = time.strftime("%H:%M %m-%d:%w") 
+
+    def main_draw(self, ctx, height, width):
+        ctx.save()
+        ctx.set_source_rgba(1, 1, 1, 1)
+        ctx.set_font_size(int(height * 0.5))
+        extents = ctx.text_extents(self.datetime)
+
+        ctx.translate((width * 0.5 - extents.width * 0.5), height * 0.7)
+
+        ctx.show_text(self.datetime)
+
+        ctx.restore()
+
+        return extents.width + 10
 
 class Main:
     def __init__(self, bar):
@@ -136,6 +177,7 @@ class Main:
         self.power_main = PowerMain(bar)
         self.memory_main = MemoryMain(bar)
         self.network_main = NetworkMain()
+        self.time_main = TimeMain()
    
     def update(self, dt):
         self.power_main.update(dt)
@@ -144,13 +186,16 @@ class Main:
         if self.current_update_time <= 0:
             self.power_main.update_stats()
             self.memory_main.update_stats()
+            self.network_main.update_stats()
+            self.time_main.update_stats()
 
             self.current_update_time = self.update_time
         else:
             self.current_update_time -= dt
 
     def draw(self, ctx, width, height):
-        x = (width - self.power_main._bar_width) - 16
+        x = (width - self.power_main._bar_width) - 32
+        x -= self.time_main.draw(ctx, x, height)
         x -= self.network_main.draw(ctx, x, height)
         x -= self.memory_main.draw(ctx, x, height)
         x -= self.power_main.draw(ctx, x, height)
