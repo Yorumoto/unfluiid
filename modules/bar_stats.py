@@ -13,14 +13,15 @@ class Bar:
         self._h = None
 
     def draw(self, ctx, x, height):
-        self._x = x
+        self._x = x - self._bar_width
         self._h = height
 
         ctx.set_source_rgba(0.2, 0.1, 0.3, 0.25)
-        common.context.rounded_rectangle(ctx, x, 0, self._bar_width, height, height * 0.5)
+        common.context.rounded_rectangle(ctx, self._x, 0, self._bar_width, height, height * 0.5)
         ctx.fill()
+
         ctx.save()
-        ctx.translate(x, 0)
+        ctx.translate(self._x, 0)
         
         new_width = self.main_draw(ctx, height, self._bar_width)
         
@@ -29,11 +30,13 @@ class Bar:
 
         ctx.restore()
 
-        return self._bar_width + 5
+        return self._bar_width + 2
     
     def collides(self, cx, cy):
         if self._x is None:
             return False
+
+        # a poor way to layout the bars, could've just update the layouts in the update field
 
         return cx > self._x and cx < self._x + self._bar_width and cy > 2 and cy < self._h
 
@@ -111,7 +114,8 @@ class MemoryMain(PowerMain):
 #TODO: decorate time and network section
 
 class NetworkMain(Bar):
-    color = (17/255, 212/255, 17/255)
+    main_color = (17/255, 212/255, 17/255)
+    color =[17/255, 212/255, 17/255]
 
     def __init__(self):
         
@@ -120,8 +124,7 @@ class NetworkMain(Bar):
     def update_stats(self, force_disconnected=False):
         if force_disconnected:
             self.link = "disconnected"
-            return
-       
+            return 
 
         for interface in ['enp0s25', 'eth0']:
             try:
@@ -134,40 +137,43 @@ class NetworkMain(Bar):
 
 
     def main_draw(self, ctx, height, width):
-        ctx.save()
-        ctx.set_source_rgba(*self.color, 1)
-        ctx.set_font_size(int(height * 0.5))
+        ctx.set_source_rgba(*self.color, 1) 
+
+        ctx.translate(15, 27) 
+        ctx.set_font_size(25)
+        ctx.show_text("說")
+
+        ctx.set_font_size(18)
         extents = ctx.text_extents(self.link)
 
-        ctx.translate((width * 0.5 - extents.width * 0.5), height * 0.7)
+        ctx.move_to(20, -2)
 
         ctx.show_text(self.link)
 
-
-        ctx.restore()
-
-        return extents.width + 10
+        return extents.width + 20
 
 class TimeMain(Bar):
     def __init__(self):
         self.update_stats()
 
     def update_stats(self):
-        self.datetime = time.strftime("%H:%M %m-%d:%w") 
+        self.datetime = time.strftime("%H:%M:%S %m/%d-%w") # time.strftime("%H:%M %m-%d:%w") 
 
     def main_draw(self, ctx, height, width):
-        ctx.save()
-        ctx.set_source_rgba(1, 1, 1, 1)
-        ctx.set_font_size(int(height * 0.5))
+        ctx.set_source_rgba(1, 1, 1, 1) 
+
+        ctx.translate(15, 27) 
+        ctx.set_font_size(25)
+        ctx.show_text("")
+
+        ctx.set_font_size(18)
         extents = ctx.text_extents(self.datetime)
 
-        ctx.translate((width * 0.5 - extents.width * 0.5), height * 0.7)
+        ctx.move_to(20, -2)
 
         ctx.show_text(self.datetime)
 
-        ctx.restore()
-
-        return extents.width + 10
+        return extents.width + 50
 
 class Main:
     def __init__(self, bar):
@@ -194,8 +200,10 @@ class Main:
             self.current_update_time -= dt
 
     def draw(self, ctx, width, height):
-        x = (width - self.power_main._bar_width) - 32
+        # x = (width - self.time_main._bar_width) - 32
+        x = width - 8
+        
         x -= self.time_main.draw(ctx, x, height)
-        x -= self.network_main.draw(ctx, x, height)
+        # x -= self.network_main.draw(ctx, x, height)
         x -= self.memory_main.draw(ctx, x, height)
         x -= self.power_main.draw(ctx, x, height)

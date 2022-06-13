@@ -7,6 +7,7 @@ import sys
 import modules.bar
 import modules.screenflash
 import modules.notification
+import modules.powermenu
 
 def main():
     if len(sys.argv) <= 1:
@@ -24,7 +25,7 @@ def main():
     #    modules.notification.Main()
     # pango lol
     elif mode == 'powermenu':
-        pass
+        modules.powermenu.Main()
     elif mode == "screenflash":
         modules.screenflash.Main()
     else:

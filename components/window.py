@@ -1,6 +1,8 @@
 from gi.repository import Gtk, Gdk
+
 from enum import Enum
 
+from time import sleep as wait
 from Xlib import X
 from Xlib.display import Display
 
@@ -47,6 +49,28 @@ class Window(Gtk.Window):
     def show_overlay(self):
         self.overlay.show_all()
 
+    _grab_event_mask_pointer = Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
+    _grab_event_mask_keyboard = Gdk.EventMask.KEY_PRESS_MASK | Gdk.EventMask.KEY_RELEASE_MASK
+
+    def grab(self): 
+        _current_time = Gdk.CURRENT_TIME
+        _last_cursor = Gdk.Cursor(Gdk.CursorType.LAST_CURSOR)
+
+        self.pointer_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_pointer, _last_cursor, _current_time)
+        self.keyboard_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_keyboard, _last_cursor, _current_time)
+        
+        wait(0.125) 
+
+        # a bit of delay because the wm sometimes takes a while to change attributes of a window causing 
+        # you to have no input control over the window and stop this rice using tty and killall
+        #
+        # i am not sure, is this essential?
+
+        self.x11_toplevel.map()
+
+    def ungrab(self):
+        pass
+
     def create_window(self):
         if self.window_type == WindowType.Bar:
             self.set_border_width(5)
@@ -59,6 +83,7 @@ class Window(Gtk.Window):
 
         self.seat = gdk_display.get_default_seat()
         self.pointer_device = self.seat.get_pointer()
+        self.keyboard_device = self.seat.get_keyboard() # forgot to change, and there we go, i did magic!
 
         self.x11_toplevel = display.create_resource_object('window', self.toplevel.get_xid())
 
