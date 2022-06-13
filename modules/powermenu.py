@@ -168,6 +168,8 @@ class Main(Looper):
 
         self.window = Window(WindowType.FullScreen)
 
+        self.command_type = None
+
         self.main_animator = Animator(self.window)
         self.main_animator.main_draw_callback = self.draw
         self.window.connect_animated_overlay(self.main_animator)
@@ -239,6 +241,9 @@ class Main(Looper):
         self.quitted = True
 
     def run_command(self):
+        if self.command_type not in self.commands:
+            return
+
         command = self.commands[self.command_type]
         subprocess.Popen(['nohup'] + command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) 
 
