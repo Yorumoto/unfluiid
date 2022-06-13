@@ -30,7 +30,7 @@ class Bar:
 
         ctx.restore()
 
-        return self._bar_width + 2
+        return self._bar_width + 10
     
     def collides(self, cx, cy):
         if self._x is None:
@@ -115,20 +115,23 @@ class MemoryMain(PowerMain):
 
 class NetworkMain(Bar):
     main_color = (17/255, 212/255, 17/255)
-    color =[17/255, 212/255, 17/255]
+    disconnected_color = (0.4, 0.4, 0.4)
 
+    color =[17/255, 212/255, 17/255]
+    
     def __init__(self):
-        
         self.update_stats(force_disconnected=True)
 
     def update_stats(self, force_disconnected=False):
         if force_disconnected:
+            self.color = self.disconnected_color    
             self.link = "disconnected"
             return 
 
         for interface in ['enp0s25', 'eth0']:
             try:
                 self.link = netifaces.ifaddresses(interface)[netifaces.AF_INET][0]['addr']
+                self.color = self.main_color
                 break
             except (KeyError, ValueError):
                 pass
@@ -150,7 +153,7 @@ class NetworkMain(Bar):
 
         ctx.show_text(self.link)
 
-        return extents.width + 20
+        return extents.width + 50
 
 class TimeMain(Bar):
     def __init__(self):
@@ -204,6 +207,6 @@ class Main:
         x = width - 8
         
         x -= self.time_main.draw(ctx, x, height)
-        # x -= self.network_main.draw(ctx, x, height)
+        x -= self.network_main.draw(ctx, x, height)
         x -= self.memory_main.draw(ctx, x, height)
         x -= self.power_main.draw(ctx, x, height)
