@@ -4,10 +4,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 import sys
 
-import modules.bar
-import modules.screenflash
-import modules.notification
-import modules.powermenu
+# import modules.notification
 
 def main():
     if len(sys.argv) <= 1:
@@ -16,6 +13,7 @@ def main():
     mode = sys.argv[1]
     
     if mode == 'bar':
+        import modules.bar
         modules.bar.Main()
     elif mode == 'dashboard':
         pass
@@ -25,8 +23,10 @@ def main():
     #    modules.notification.Main()
     # pango lol
     elif mode == 'powermenu':
+        import modules.powermenu
         modules.powermenu.Main()
     elif mode == "screenflash":
+        import modules.screenflash
         modules.screenflash.Main()
     else:
         raise SystemExit('Unknown mode')

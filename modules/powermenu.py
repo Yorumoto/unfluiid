@@ -144,12 +144,12 @@ class Item:
             ctx.restore()
 
         ctx.restore()
-
+ 
 class Main(Looper):
     commands = {
         ItemType.Shutdown: ['poweroff'],
         ItemType.Restart: ['reboot'],
-        ItemType.Suspend: ['./main.py', 'screenflash'],
+        ItemType.Suspend: [os.path.join(os.path.dirname(__file__), "../", "main.py"), "screenflash"],
         ItemType.Logout: [], # are you in sway or i3?
     }
 
@@ -245,6 +245,7 @@ class Main(Looper):
             return
 
         command = self.commands[self.command_type]
+        print(command)
         subprocess.Popen(['nohup'] + command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) 
 
     def update(self, dt):
