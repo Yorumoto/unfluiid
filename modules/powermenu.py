@@ -55,7 +55,7 @@ class Item:
         self._ht = 0 # hover time
         self._at = 0 # appearance time
         self._att = delay_time # appearance delay time
-
+        
         self.sub_item_select = 0
 
     def set_order(self, index, length):
@@ -85,20 +85,21 @@ class Item:
         self.x = (((-((self.length * (self.width + 15)) * 0.5)) + (self.index * (self.width + 15))) * (1 - _st)) - (self.width * 0.5 * _st)
         self.y = (self.height * -0.5)
 
-        self.width = self._small_size[0] + (_st * 350)
+        self.width = self._small_size[0] + (_st * 600)
         self.height = self._small_size[1] + (_st * 150)
 
     def draw(self, ctx):
         _at = pytweening.easeOutQuad(self._at)
         _ht = pytweening.easeInOutQuad(self._ht)
         _st = pytweening.easeInOutQuad(self._st)
+        _sat = pytweening.easeInOutQuad(self._sat)
         # _stt = min(_st * 2, 1)
 
         ctx.set_source_rgba(
                 self._default_color[0] + self._selected_color[0] * _ht,
                 self._default_color[1] + self._selected_color[1] * _ht,
                 self._default_color[2] + self._selected_color[1] * _ht,
-        _at)
+        _at * (1 - _sat))
 
         common.context.rounded_rectangle(ctx, self.x, self.y + ((1 - _at) * 200), self.width, self.height, self.height * 0.06125)
         ctx.fill()
@@ -108,7 +109,7 @@ class Item:
         ctx.translate((self.x + self.width * 0.5) - 35, (self.y + self.height * 0.5) + 35 + ((1 - _at) * 200))
 
         r = 1 - _ht
-        ctx.set_source_rgba(r, r, r, _at * (1 - _st))
+        ctx.set_source_rgba(r, r, r, _at * (1 - _st) * (1 - _sat))
         
         ctx.show_text(self._item_icons.get(self.item_type))
         ctx.restore()
@@ -164,6 +165,10 @@ class Main(Looper):
 
         ##
 
+        self.execute_timer = 1
+        self.no_input_timer = 10
+        self.no_input = True
+
         self.items = [Item(x, 0.25 + (i * 0.125)).set_order(i, 4) for i, x in enumerate([ItemType.Shutdown, ItemType.Restart, ItemType.Suspend, ItemType.Logout])]
 
         self.window = Window(WindowType.FullScreen)
@@ -177,6 +182,7 @@ class Main(Looper):
         self.window.connect('key_press_event', self.on_key_press)
         self.window.create_window()
         self.window.grab()
+
 
         self.hover_index = 0
         self.select_index = 0
@@ -199,6 +205,8 @@ class Main(Looper):
             return True
 
         if self.items[0]._at > 0.8 and not self.quitted:
+            self.no_input = False
+
             if keycode == 36:
                 if self.selecting:
                     if self.items[self.select_index].sub_item_select == 0:
@@ -241,12 +249,11 @@ class Main(Looper):
         self.quitted = True
 
     def run_command(self):
-        if self.command_type not in self.commands:
-            return
-
-        command = self.commands[self.command_type]
-        print(command)
-        subprocess.Popen(['nohup'] + command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) 
+        try:
+            command = self.commands[self.command_type]
+            subprocess.Popen(['nohup'] + command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except KeyError:
+            pass
 
     def update(self, dt):
         # size = self.window.get_size()
@@ -260,9 +267,18 @@ class Main(Looper):
                 self.quitted
             )
 
+        if not self.quitted and self.no_input:
+            if self.no_input_timer > 0:
+                self.no_input_timer -= dt
+            else:
+                self.quit()
+
         if self.quitted and self.items[len(self.items) - 1]._at <= 0:
-            self.run_command()
-            Gtk.main_quit()
+            if self.execute_timer > 0 and self.command_type in self.commands:
+                self.execute_timer -= dt
+            else:
+                self.run_command()
+                Gtk.main_quit()
 
         self.main_animator.draw()
 

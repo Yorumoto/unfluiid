@@ -1,5 +1,6 @@
 from gi.repository import Gtk, Gdk
 
+import os
 from enum import Enum
 
 from time import sleep as wait
@@ -56,15 +57,10 @@ class Window(Gtk.Window):
         _current_time = Gdk.CURRENT_TIME
         _last_cursor = Gdk.Cursor(Gdk.CursorType.LAST_CURSOR)
 
-        self.pointer_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_pointer, _last_cursor, _current_time)
-        self.keyboard_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_keyboard, _last_cursor, _current_time)
-        
-        wait(0.125) 
-
-        # a bit of delay because the wm sometimes takes a while to change attributes of a window causing 
-        # you to have no input control over the window and stop this rice using tty and killall
-        #
-        # i am not sure, is this essential?
+        # self.x11_toplevel.grab_pointer(False, X.ButtonPressMask | X.ButtonReleaseMask | X.Button1MotionMask, X.GrabModeAsync, X.GrabModeAsync, X.NONE, X.NONE, X.CurrentTime)
+        # self.x11_toplevel.grab_keyboard(False, X.GrabModeAsync, X.GrabModeAsync, X.CurrentTime)
+        while self.pointer_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_pointer, _last_cursor, _current_time) == Gdk.GrabStatus.FROZEN or self.keyboard_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_keyboard, _last_cursor, _current_time) == Gdk.GrabStatus.FROZEN:
+                pass
 
         self.x11_toplevel.map()
 
@@ -101,7 +97,8 @@ class Window(Gtk.Window):
             # override-redirect
             self.x11_toplevel.change_attributes(override_redirect=1)
             self.x11_toplevel.set_wm_protocols([display.intern_atom('WM_TAKE_FOCUS')])
-       
+            self.x11_toplevel.get_attributes()
+
             if self.window_type == WindowType.FullScreen:
                 monitor = self.screen.get_monitor_geometry(self.screen.get_monitor_at_window(self.toplevel)) # feels like c tho right?
                 self.set_size_request(monitor.width, monitor.height)
