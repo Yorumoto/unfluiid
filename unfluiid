@@ -18,7 +18,8 @@ def main():
     elif mode == 'dashboard':
         pass
     elif mode == 'search':
-        pass
+        import modules.search
+        modules.search.Main()
     # elif mode == "notification":
     #    modules.notification.Main()
     # pango lol

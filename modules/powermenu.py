@@ -187,7 +187,7 @@ class Main(Looper):
         self.items = [Item(x, 0.25 + (i * 0.125)).set_order(i, 4) for i, x in enumerate([ItemType.Shutdown, ItemType.Restart, ItemType.Suspend, ItemType.Logout])]
 
         self.window = Window(WindowType.FullScreen)
-
+        self.window.force_grab = False
         self.command_type = None
 
         self.main_animator = Animator(self.window)

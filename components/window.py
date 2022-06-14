@@ -12,8 +12,8 @@ gdk_display = Gdk.Display.get_default()
 
 class WindowType(Enum):
     Bar = 0
-    Floating = 1
-    FullScreen = 2
+    # Floating = 1
+    FullScreen = 1
 
 class Window(Gtk.Window):
     _bar_size = 45
@@ -37,6 +37,7 @@ class Window(Gtk.Window):
         self.monitor = None
         self.x11_toplevel = None
         self.toplevel = None
+        self.force_grab = True
 
         self.add(self.overlay) 
 
@@ -53,14 +54,18 @@ class Window(Gtk.Window):
     _grab_event_mask_pointer = Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
     _grab_event_mask_keyboard = Gdk.EventMask.KEY_PRESS_MASK | Gdk.EventMask.KEY_RELEASE_MASK
 
-    def grab(self): 
+    def _grab(self):
         _current_time = Gdk.CURRENT_TIME
         _last_cursor = Gdk.Cursor(Gdk.CursorType.LAST_CURSOR)
+        return self.pointer_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_pointer, _last_cursor, _current_time) == Gdk.GrabStatus.SUCCESS and self.keyboard_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_keyboard, _last_cursor, _current_time) == Gdk.GrabStatus.SUCCESS
 
-        # self.x11_toplevel.grab_pointer(False, X.ButtonPressMask | X.ButtonReleaseMask | X.Button1MotionMask, X.GrabModeAsync, X.GrabModeAsync, X.NONE, X.NONE, X.CurrentTime)
-        # self.x11_toplevel.grab_keyboard(False, X.GrabModeAsync, X.GrabModeAsync, X.CurrentTime)
-        while self.pointer_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_pointer, _last_cursor, _current_time) == Gdk.GrabStatus.FROZEN or self.keyboard_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_keyboard, _last_cursor, _current_time) == Gdk.GrabStatus.FROZEN:
-                pass
+    def grab(self): 
+        if self.force_grab:
+            while not self._grab():
+                    pass
+        else:
+            if not self._grab():
+                raise SystemExit("Failed to grab input, exiting...")
 
         self.x11_toplevel.map()
 
@@ -90,18 +95,15 @@ class Window(Gtk.Window):
 
             self.x11_toplevel.change_property(display.intern_atom('_NET_WM_STRUT'), display.intern_atom('CARDINAL'), 32, [0, 0, self._bar_size, 0], X.PropModeReplace)
             self.x11_toplevel.change_property(display.intern_atom('_NET_WM_STRUT_PARTIAL'), display.intern_atom('CARDINAL'), 32, [0, 0, self._bar_size, 0, 0, 0, 0, 0, 0, 0], X.PropModeReplace)
-        elif self.window_type in [WindowType.FullScreen, WindowType.Floating]:
-            if self.window_type == WindowType.Floating:
-                pass # move window to center
-
+        elif self.window_type == WindowType.FullScreen:
             # override-redirect
             self.x11_toplevel.change_attributes(override_redirect=1)
             self.x11_toplevel.set_wm_protocols([display.intern_atom('WM_TAKE_FOCUS')])
             self.x11_toplevel.get_attributes()
 
-            if self.window_type == WindowType.FullScreen:
-                monitor = self.screen.get_monitor_geometry(self.screen.get_monitor_at_window(self.toplevel)) # feels like c tho right?
-                self.set_size_request(monitor.width, monitor.height)
+            # if self.window_type == WindowType.FullScreen:
+            monitor = self.screen.get_monitor_geometry(self.screen.get_monitor_at_window(self.toplevel)) # feels like c tho right?
+            self.set_size_request(monitor.width, monitor.height)
 
             # focus the window
             self.x11_toplevel.map()
