@@ -88,20 +88,31 @@ class Item:
         self.width = self._small_size[0] + (_st * 600)
         self.height = self._small_size[1] + (_st * 150)
 
-    def draw(self, ctx):
+    def draw(self, ctx, for_shadow=False):
         _at = pytweening.easeOutQuad(self._at)
         _ht = pytweening.easeInOutQuad(self._ht)
         _st = pytweening.easeInOutQuad(self._st)
         _sat = pytweening.easeInOutQuad(self._sat)
         # _stt = min(_st * 2, 1)
 
-        ctx.set_source_rgba(
-                self._default_color[0] + self._selected_color[0] * _ht,
+        y = self.y + ((1 - _at) * 200)
+        
+        _atp = _at * (1 - _sat)
+
+        _color = (self._default_color[0] + self._selected_color[0] * _ht,
                 self._default_color[1] + self._selected_color[1] * _ht,
                 self._default_color[2] + self._selected_color[1] * _ht,
-        _at * (1 - _sat))
+        _atp)
 
-        common.context.rounded_rectangle(ctx, self.x, self.y + ((1 - _at) * 200), self.width, self.height, self.height * 0.06125)
+        corner_radius = self.height * 0.06125
+
+        if for_shadow:
+            common.context.rounded_shadow(ctx, self.x, y, self.width, self.height, color=(_color[0], _color[1], _color[2]), radius=corner_radius, global_alpha=_atp)
+            return
+
+        ctx.set_source_rgba(*_color)
+
+        common.context.rounded_rectangle(ctx, self.x, y, self.width, self.height, corner_radius)
         ctx.fill()
 
         ctx.save()
@@ -118,7 +129,7 @@ class Item:
         ctx.select_font_face("Iosevka Term", cairo.FontSlant.NORMAL, cairo.FontWeight.NORMAL)
         ctx.set_font_size(100)
 
-        ctx.translate(self.x + ((1 - _st) * (self.width * 2.6)), self.y + ((1 - _at) * 200))
+        ctx.translate(self.x + ((1 - _st) * (self.width * 2.6)), self.y)
 
         for i in range(2):
             w = self.width * 0.5 - 20
@@ -127,13 +138,17 @@ class Item:
             
             _sht = pytweening.easeInOutQuad(self._sht[i])
 
-            ctx.set_source_rgba(
+            sub_color = (
                 self._default_sub_color[0] + self._selected_sub_color[0] * _sht,
                 self._default_sub_color[1] + self._selected_sub_color[1] * _sht,
                 self._default_sub_color[2] + self._selected_sub_color[2] * _sht,
             _st)
-
+ 
+            ctx.set_source_rgba(*sub_color)
+            
+            common.context.rounded_shadow(ctx, x, 10, w, h, color=(sub_color[0], sub_color[1], sub_color[2]), radius=25, global_alpha=sub_color[3])
             common.context.rounded_rectangle(ctx, x, 10, w, h, 25)
+
             ctx.fill()
 
             ctx.save()
@@ -225,12 +240,15 @@ class Main(Looper):
 
         return True
 
-    def draw(self, ctx, width, height):
+    def draw(self, ctx, width, height): 
         ctx.translate(width * 0.5, height * 0.5)
         ctx.set_font_size(70)
         ctx.select_font_face("feather", cairo.FontSlant.NORMAL, cairo.FontWeight.NORMAL)
 
         selected_items = []
+
+        for _, item in enumerate(self.items):
+            item.draw(ctx, for_shadow=True)
 
         for index, item in enumerate(self.items):
             if item._st > 0.1:
@@ -257,7 +275,6 @@ class Main(Looper):
 
     def update(self, dt):
         # size = self.window.get_size()
-
         for index, item in enumerate(self.items):
             item.update(
                 dt, 

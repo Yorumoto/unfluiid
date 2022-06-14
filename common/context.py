@@ -26,6 +26,26 @@ def rounded_rectangle(context, x, y, width, height, radius=25):
     context.arc(x + radius, y + radius, radius, 180 * _DEGREES, 270 * _DEGREES)
     context.close_path()
 
+def rounded_shadow(context, x, y, width, height, radius=25, depth=25, depth_by=20, depth_alpha=0.125, global_alpha=1, width_offset=20, height_offset=20, color=None): 
+    # lotta parameters for one shadow
+    # i'm gonna be overwhelmed :dizzy_face:
+
+    context.save()
+
+    if color is None:
+        color = (0.1, 0.1, 0.1)
+
+
+    for i in range(depth):
+        completion = i / depth
+        db = depth_by * completion
+
+        context.set_source_rgba(*color, completion * depth_alpha * global_alpha)
+        rounded_rectangle(context, x + (db * 0.5) - (width_offset * 0.5), y + (db * 0.5) - (height_offset * 0.5), width - db + width_offset, height - db + height_offset, radius)
+        context.fill()
+
+    context.restore()
+
 def circle(context, x, y, radius):
     context.new_path()
     context.arc(x, y, radius, 0, _DPI)
