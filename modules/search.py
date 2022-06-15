@@ -8,14 +8,18 @@ import pytweening
 
 class CurrentState: # struct :trollface:
     query = ""
-    width = 200
+    width = 600
+    global_alpha = 0
+
 
 class EntryContainer:
     def __init__(self, current_state):
         self.current_state = current_state
 
     def draw(self, ctx):
-        pass
+        ctx.set_source_rgba(1, 1, 1, self.current_state.global_alpha)
+        common.context.rounded_rectangle(ctx, 0, -30, self.current_state.width, 60, 15)
+        ctx.fill()
 
 class Main(Looper):
     def __init__(self):
@@ -48,8 +52,9 @@ class Main(Looper):
 
     def draw(self, ctx, width, height):
         _at = pytweening.easeInOutQuad(self._at)
+        self.current_state.global_alpha = _at
 
-        ctx.translate((width * 0.5) - (600 * (1 - _at) - (self.current_state.width * 0.5)), height * 0.5)
+        ctx.translate((width * 0.5) - (600 * (1 - _at)) - (self.current_state.width * 0.5), height * 0.5)
         self.container_test.draw(ctx)
 
     def on_key_press(self, _, event):
