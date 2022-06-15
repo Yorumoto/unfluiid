@@ -31,3 +31,7 @@ Each package's usage:
 
 2. In your window manager's configs, ...
 
+### Known Issues
+- The window title (in this case with the `...`) seems to overlap when on a screen resolution apparently smaller than 1920x1080, especially if you have many workspaces open.
+
+- The window title doesn't properly show unicode characters because it's not using the Pango library.

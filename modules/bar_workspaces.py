@@ -56,7 +56,7 @@ class WorkspaceCircle:
         r = 1 - self._ft
         ctx.set_source_rgba(r, r, r, _at)
         ctx.save()
-        ctx.translate(x - (3.5 + ((len(self._t)-1) * 3)), (height * 0.5) + 4)
+        ctx.translate(x - (2.75 + ((len(self._t)-1) * 3)), (height * 0.5) + 4)
         ctx.show_text(self._t) 
         ctx.restore()
 
@@ -67,13 +67,19 @@ class WorkspaceCircle:
 class Main:
     WORKSPACES_MAX = 10
 
+    focused_placeholder = "the coolest wallpaper"
+
     def __init__(self, i3_connection):
         self.layout = None
 
         self.i3_connection = i3_connection
         self.i3_connection.on(Event.WORKSPACE_FOCUS, self.on_workspace_focus)
         self.i3_connection.on(Event.WINDOW_TITLE, self.on_window_update_title)
+        self.i3_connection.on(Event.WINDOW_FOCUS, self.on_window_update_title)
+        self.i3_connection.on(Event.WINDOW_CLOSE, self.on_window_update_title)
         self.i3_connection.on(Event.WINDOW_URGENT, self.urgent)
+
+        self.focused_window_name = None
 
         self.update_workspaces()
         self.on_window_update_title()
@@ -84,7 +90,10 @@ class Main:
         for i, workspace in enumerate(self.workspaces):
             self.workspace_circles[workspace.num]._sdt = (i) * (0.125 * 0.75)
             self.workspace_circles[workspace.num]._atb = True
-
+        
+        self.title_tweening = False
+        self.title_tweening_new_passed = False
+        self._tt = 0 # title time (1-2)
 
         self._view_workspaces = 1
         self._int_view_workspaces = 1
@@ -112,7 +121,6 @@ class Main:
         self.workspaces = self.i3_connection.get_workspaces()
         self.i3_workspaces = len(self.workspaces)
 
-
         # broken lol
         # self.focused_workspace = min(focused.workspace().num, self.i3_workspaces)
         
@@ -131,9 +139,20 @@ class Main:
         focused = self.get_focused()
 
         try:
-            self.focused_window_name = "the coolest wallpaper" if int(focused.name) else focused.name
+            self.new_focused_window_name = self.focused_placeholder if int(focused.name) else focused.name
         except (ValueError, TypeError):
-            self.focused_window_name = (focused.name[0:40] + "...") if len(focused.name) >= 40 else focused.name
+            try:
+                self.new_focused_window_name = (focused.name[0:40] + "...") if len(focused.name) >= 40 else focused.name
+            except TypeError:
+                self.new_focused_window_name = self.focused_placeholder
+
+        if self.focused_window_name is None:
+            self.focused_window_name = self.new_focused_window_name
+        elif self.focused_window_name != self.new_focused_window_name and not self.title_tweening:
+            self.title_tweening = True
+            self.title_tweening_new_passed = False
+            self._tt = 0
+
 
     def on_workspace_focus(self, _, new_workspace):
         self.update_workspaces()
@@ -148,6 +167,20 @@ class Main:
         self.on_window_update_title()
 
     def update(self, dt):
+        if self.title_tweening:
+            self._tt = min(self._tt + dt * 7.5, 2)
+
+            if self._tt >= 1 and not self.title_tweening_new_passed:
+                self.focused_window_name = self.new_focused_window_name
+                self.title_tweening_new_passed = True
+
+            if self._tt >= 2:
+                self.title_tweening = self.new_focused_window_name != self.focused_window_name
+                self._tt = 0
+
+                if self.title_tweening:
+                    self.title_tweening_new_passed = False
+
         if self._lvt < 1:
             self._view_workspaces = self._lvtt + (self._lvttt * pytweening.easeInOutQuad(self._lvt))
 
@@ -156,8 +189,8 @@ class Main:
             if self._lvt > 1:
                 self._lvt = 1
         
-        if self._lvtr < 0.5:
-            self._lvtr += dt * 3
+        if self._lvtr < 1:
+            self._lvtr = min(self._lvtr + dt * 3, 1)
 
         # for i, circle in enumerate(self.workspace_circles):
         #    if i + 1 <= self.i3_workspaces:
@@ -183,6 +216,7 @@ class Main:
         #    self.layout = PangoCairo.create_layout(context)
         #    self.layout.set_font_description(Pango.FontDescription(f'Cantarell {int(height - 5)}'))
 
+        context.select_font_face("Iosevka Term", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         context.set_font_size(11)
 
         _lvtr = pytweening.easeInOutQuad(self._lvtr)
@@ -195,23 +229,23 @@ class Main:
 
         for circle in self.workspace_circles:
             x += circle.draw(context, x, height)
+        
+        text_tt = pytweening.easeOutQuad((1 - self._tt) if self._tt <= 1 else (self._tt - 1))
 
-        context.set_source_rgba(0.2, 0.1, 0.3, 0.75 * _lvtr)
+        context.set_source_rgba(0.2, 0.1, 0.3, 0.75 * (_lvtr * 0.5) * text_tt)
         
-        context.select_font_face("Iosevka Term", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         context.set_font_size(20)
-        
+
         extents = context.text_extents(self.focused_window_name)
 
         common.context.rounded_rectangle(context, (self._view_workspaces * height) + 5, 0, extents.width + 30, height, height * 0.5)
         context.fill()
         context.save()
         context.translate(self._view_workspaces * height + 15, height * 0.75)
-        context.set_source_rgba(1, 1, 1, 1)
+        context.set_source_rgba(1, 1, 1, text_tt * _lvtr)
         
         context.show_text(self.focused_window_name) 
         
-
         context.stroke()
         context.restore()
 

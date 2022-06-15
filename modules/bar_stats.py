@@ -4,6 +4,8 @@ import psutil
 import netifaces
 import pytweening
 
+import alsaaudio
+
 class Bar:
     _bar_width = 150
     _default_bar_width = 150
@@ -50,6 +52,8 @@ class PowerMain(Bar):
     def __init__(self, bar):
         super().__init__()
 
+        self._force_view_text = False
+
         self.bar = bar
         self.percentage_text = "0.0%"
         self.percentage = 0
@@ -63,7 +67,7 @@ class PowerMain(Bar):
     def update(self, dt):
         _, cx, cy = self.bar.pointer_device.get_position()
 
-        self._vtt = max(min(self._vtt + (dt if self.collides(cx, cy) else -dt) * 5, 1), 0)
+        self._vtt = max(min(self._vtt + (dt if (self._force_view_text or self.collides(cx, cy)) else -dt) * 5, 1), 0)
 
     def main_draw(self, ctx, height, width):
         ctx.set_source_rgba(0.4, 0.4, 0.4, 1)
@@ -75,7 +79,6 @@ class PowerMain(Bar):
         max_progress_width = self._bar_width * 0.6
         common.context.rounded_rectangle(ctx, 40, bar_y, max_progress_width, 5, 2)
         ctx.fill()
-
 
         ctx.set_source_rgba(*self.colors, _vtt)
 
@@ -110,8 +113,6 @@ class MemoryMain(PowerMain):
         self.percentage = memory.percent / 100
         self.percentage_text = f"{(self.percentage * 100):.1f}% {((memory.used/1024)/1024)/1024:.1f}GB"
 
-
-#TODO: decorate time and network section
 
 class NetworkMain(Bar):
     main_color = (17/255, 212/255, 17/255)
@@ -178,19 +179,52 @@ class TimeMain(Bar):
 
         return extents.width + 50
 
+class VolumeMain(PowerMain):
+    colors = (3/255, 194/255, 252/255)
+    volume_symbol = "墳"
+    no_volume_symbol = ""
+    muted_symbol = "ﱝ"
+
+    def __init__(self, bar):
+        super().__init__(bar)
+        self.percentage_text = "0%"
+        self.update_stats()
+
+    def update_stats(self):
+        m = alsaaudio.Mixer()
+        vol = m.getvolume()[0]
+        muted = m.getmute()[0] == 1
+
+        self.percentage = min(vol / 100, 1)
+        self.percentage_text = f"{vol}%"
+
+        self.symbol = self.muted_symbol if muted else (self.no_volume_symbol if vol <= 0 else self.volume_symbol)
+        self._force_view_text = vol > 100
+
 class Main:
     def __init__(self, bar):
         self.update_time = 1
+        self.update_volume_time = 0.05
+
+        self.current_update_volume_time = self.update_volume_time
         self.current_update_time = self.update_time
 
         self.power_main = PowerMain(bar)
         self.memory_main = MemoryMain(bar)
         self.network_main = NetworkMain()
+        self.volume_main = VolumeMain(bar)
         self.time_main = TimeMain()
    
     def update(self, dt):
         self.power_main.update(dt)
         self.memory_main.update(dt)
+        self.volume_main.update(dt)
+
+        if self.current_update_volume_time <= 0:
+            self.volume_main.update_stats()
+            self.current_update_volume_time = self.update_volume_time
+        else:
+            self.current_update_volume_time -= dt
 
         if self.current_update_time <= 0:
             self.power_main.update_stats()
@@ -208,5 +242,6 @@ class Main:
         
         x -= self.time_main.draw(ctx, x, height)
         x -= self.network_main.draw(ctx, x, height)
+        x -= self.volume_main.draw(ctx, x, height)
         x -= self.memory_main.draw(ctx, x, height)
         x -= self.power_main.draw(ctx, x, height)
