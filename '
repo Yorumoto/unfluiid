@@ -1,0 +1,48 @@
+import os
+from posixpath import splitext
+from lark import Lark, Transformer
+
+# i should probably made my own handwriting parser for .desktop instead of lark
+# i'll just use lark for playing around, because parsing .desktop files are quite straightforward
+
+grammar = r'''
+L_BRACKET: '['
+R_BRACKET: ']'
+ANY: /A-Za-z /x
+
+entry_header: L_BRACKET ANY R_BRACKET
+
+entry: entry_header
+
+?start: entry*
+'''
+
+tokenizer = Lark(grammar=grammar, parser='lalr')
+
+class ToDictionary(Transformer):
+    pass
+
+class Entry:
+    def __init__(self, path):
+        self.path = path
+
+    def parse(self):
+        pass
+
+    def can_show(self):
+        pass
+
+if __name__ == '__main__':
+    desktop_directory = '/usr/share/applications'
+
+    for path in os.listdir(desktop_directory):
+        full_path = os.path.join(desktop_directory, path)
+        _, ext = os.path.splitext(path)
+        
+        if path != ".desktop":
+            continue
+
+        entry = Entry(full_path)
+        entry.parse()
+
+        break
