@@ -16,6 +16,7 @@ class Looper:
         return True
 
     def loop_init(self, call_gtk_main=True):
+        self._lt = get_time()
         self.callback_number = GLib.timeout_add(15, self._first_update)
 
         if call_gtk_main:

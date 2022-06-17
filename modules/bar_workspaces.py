@@ -4,8 +4,10 @@ import os
 import pytweening
 from i3ipc.events import Event
 
-class WorkspaceRipple: # huh
-    pass
+import gi
+gi.require_version('Pango', '1.0')
+gi.require_version('PangoCairo', '1.0')
+from gi.repository import Pango, PangoCairo
 
 class WorkspaceCircle:
     def __init__(self):
@@ -86,11 +88,14 @@ class Main:
 
         self.workspace_circles = [WorkspaceCircle() for _ in range(self.WORKSPACES_MAX+1)]
         
+        self.layout_description = Pango.FontDescription("Iosevka Term 15")
+        self.layout = None
+
         # for i in range(self.i3_workspaces+1):
         for i, workspace in enumerate(self.workspaces):
             self.workspace_circles[workspace.num]._sdt = (i) * (0.125 * 0.75)
             self.workspace_circles[workspace.num]._atb = True
-        
+       
         self.title_tweening = False
         self.title_tweening_new_passed = False
         self._tt = 0 # title time (1-2)
@@ -152,7 +157,6 @@ class Main:
             self.title_tweening = True
             self.title_tweening_new_passed = False
             self._tt = 0
-
 
     def on_workspace_focus(self, _, new_workspace):
         self.update_workspaces()
@@ -216,8 +220,8 @@ class Main:
         #    self.layout = PangoCairo.create_layout(context)
         #    self.layout.set_font_description(Pango.FontDescription(f'Cantarell {int(height - 5)}'))
 
-        context.select_font_face("Iosevka Term", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
-        context.set_font_size(11)
+        if self.layout is None:
+            self.layout = PangoCairo.create_layout(context)
 
         _lvtr = pytweening.easeInOutQuad(self._lvtr)
         context.set_source_rgba(0.2, 0.1, 0.3, 0.75 * _lvtr)
@@ -236,16 +240,21 @@ class Main:
         
         context.set_font_size(20)
 
-        extents = context.text_extents(self.focused_window_name)
+        # self.layout.set_text(self.focused_window_name, -1)
+        extents = self.layout.get_pixel_size()
 
         common.context.rounded_rectangle(context, (self._view_workspaces * height) + 5, 0, extents.width + 30, height, height * 0.5)
         context.fill()
         context.save()
-        context.translate(self._view_workspaces * height + 15, height * 0.75)
+        context.translate(self._view_workspaces * height + 15, 5)
         context.set_source_rgba(1, 1, 1, text_tt * _lvtr)
-        
-        context.show_text(self.focused_window_name) 
+      
+        self.layout.set_font_description(self.layout_description)
+        common.context.text(context, self.layout, self.focused_window_name)
         
         context.stroke()
         context.restore()
+       
+        # influence the font to others
+        context.select_font_face("Iosevka Term", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
 

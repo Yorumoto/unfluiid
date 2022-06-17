@@ -1,17 +1,31 @@
 from math import pi
 
-# import gi
-# gi.require_version("PangoCairo", '1.0')
-# from gi.repository import PangoCairo
+import gi
+gi.require_version("PangoCairo", '1.0')
+gi.require_version("Pango", '1.0')
+from gi.repository import Pango, PangoCairo
 
 _DEGREES = pi / 180
 _DPI = pi * 2
 
 # default_radius = (25, 25, 25, 25)
 
-PANGO_REDUCE = 1024
+PANGO_REDUCE = Pango.SCALE
 
 # context vs ctx, :thinking:
+
+def text(context, layout, text="hello"):
+    context.save()
+
+    layout.set_text(text, -1)
+
+    PangoCairo.update_layout(context, layout)
+    # TODO: pls help, it lowers down a little bit when it comes to unicode
+    # w, h = layout.get_size()
+    # context.move_to(-(w / PANGO_REDUCE) * 0.5, 0)
+    PangoCairo.show_layout(context, layout)
+
+    context.restore()
 
 def rounded_rectangle(context, x, y, width, height, radius=25):
     # if isinstance(radius, int):
