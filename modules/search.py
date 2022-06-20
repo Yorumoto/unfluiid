@@ -75,7 +75,8 @@ class EntryMenu:
         self._sia = DeltaTween(target=0)
         self._rtt = 0 # results transparency timer
         
-        self.entries = {} # [EntryObject] -> [EntryShiftTimer, EntryShiftDelayTimer, IsLeaving]
+        self.entries = {} # [EntryObject] -> [EntryShiftTimer, EntryShiftDelayTimer, IsLeaving, RelativeIndex]
+        # pls add RelativeIndex
 
         self.last_page = None
         self.last_entries_len = None
@@ -95,15 +96,16 @@ class EntryMenu:
             page_entries = self.current_state.entries[start:end]
 
             for index, (entry, value) in enumerate(self.entries.items()):
+                value[1] = index * (0.125 * 0.2)
                 value[2] = True
 
             for rel_index, entry in enumerate(page_entries):
-                self.entries[entry] = [0, rel_index * (0.125 * 0.25), False]
+                self.entries[entry] = [0, rel_index * (0.125 * 0.2), False]
 
             self._sia.change_target(entries_len)
 
         self._sia.update(dt * 4)
-        self._rtt = max(min(self._rtt + (dt * (3 if entries_len else -3)), 1), 0)
+        self._rtt = max(min(self._rtt + (dt * (6 if entries_len else -3)), 1), 0)
         
         new_entries = {}
 
@@ -112,15 +114,12 @@ class EntryMenu:
                 timers[1] -= dt
                 continue
 
-            timers[0] = min(timers[0] + dt * 4, 1)
+            timers[0] = max(min(timers[0] + dt * (-2 if timers[2] else 2), 1), 0)
             
-            print(timers, timers[2])
-            if not timers[2]:
-                print('yes', entry.name)
-                new_entries[entry] = timers
+            new_entries[entry] = timers
 
-        print(len(new_entries))
-        self.entries = new_entries
+        # print(len(new_entries))
+        # self.entries = new_entries
 
         self.last_entries_len = entries_len
         self.last_page = self.current_state.entry_page
@@ -188,7 +187,7 @@ class DMenu(EntryMenu):
 
         common.context.rounded_rectangle(ctx, 0, abs_y, self.current_state.width, height, min(max(height, 40), 20))
         ctx.fill()
-
+        
         for index, (entry, [entry_timer, entry_delay_timer, leave]) in \
                 enumerate(self.entries.items()):
 
