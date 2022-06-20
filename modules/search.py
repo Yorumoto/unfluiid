@@ -1,238 +1,313 @@
-from socket import AI_PASSIVE
-from components.looper import Looper
 from components.window import Window, WindowType
+from components.textbox import Textbox
 from components.animator import Animator
+from components.looper import Looper
+from components.tween import DeltaTween
 
-import gi
-gi.require_version('Rsvg', '2.0')
-gi.require_version('Pango', '1.0')
-gi.require_version('PangoCairo', '1.0')
-from gi.repository import Gtk, Rsvg, Pango, PangoCairo
+from enum import Enum
+from threading import Thread
 
-import os
-import common.context
+from random import randint
+
 import pytweening
+import common.context
+from gi.repository import Gtk, Pango, PangoCairo
 
-import cairo
-from cairo import ImageSurface
+import time
+import os
 
-from xdg import DesktopEntry
-from xdg.Exceptions import ValidationError, ParsingError
-from xdg.IconTheme import getIconPath
+INPUT_BAR_FONT = Pango.FontDescription("Iosevka Term 25")
 
-class CurrentState: # struct :trollface:
-    query = ""
-    cursor_position = 0
+class MenuType(Enum):
+    Unknown = -1
+    Shell = 0
+    Dmenu = 1
+
+class CurrentState:
+    active_menu_type = MenuType.Unknown
+
+    input_bar_height = 50
     layout = None
+    
+    entries = []
+    entries_len = 0 # update
+    total_entries_len = 0 # update pls
+    
+    entry_index = 0
+    entry_page = 0
 
-    input_bar_font = Pango.FontDescription("Iosevka Term 30")
+    cursor_transparency = 0
+    loaded_transparency = 0
+
+    searched = False
+    searching = False
+    loaded = False
+
+    view_size = 15
 
     width = 800
-    global_alpha = 0
-    desktop_session = os.getenv("DESKTOP_SESSION")
-    entries = []
-    executable_entries = []
-    search_entries = []
+    query : Textbox
 
-    _ct = 0 # cursor blink time (1-2)
-    p_ct = 0 # cursor blink time (1-2)
+    def update_page(self):
+        self.entry_page = self.entry_index // self.view_size
+        # print(self.entry_index, self.view_size, self.entry_page)
 
-svg_handler = Rsvg.Handle()
-ascii_range = range(32, 129)
+    def get_page_offset(self):
+        return self.entry_page * self.view_size, (self.entry_page * self.view_size) + self.view_size
 
-class Entry(DesktopEntry.DesktopEntry):
-    def __init__(self, path):
-        super().__init__(path)
+class EntryAction:
+    pass
 
-        self.name = self.getName()
-        self.generic_name = self.getGenericName()
-        self.comment = self.getComment()
-        self.exec = self.getExec()
-        
-        for sub in ['%F', '%f', '%U', '%u']:
-            self.exec = self.exec.replace(sub, '')
+class Entry:
+    name = ""
+    actions = []
+    short_description = ""
+    description = ""
+    icon = None
 
-        self.icon_path = getIconPath(self.getIcon())
+class EntryMenu:
+    symbol = ""
+    background = (0.22, 0.215, 0.22)
 
-        if self.icon_path is not None:
-            _, self.ext = os.path.splitext(self.icon_path)
-            
-            if self.ext == '.png':
-                self.icon = ImageSurface.create_from_png(self.icon_path)
-            elif self.ext == '.svg':
-                self.icon = svg_handler.new_from_file(self.icon_path)
-
-    def can_show(self, current_state):
-        show_in = self.getOnlyShowIn()
-
-        return not self.getHidden() and not self.getNoDisplay() \
-                and current_state.desktop_session not in self.getNotShowIn() \
-                and (not show_in or current_state.desktop_session in show_in)
-
-
-class EntryContainer:
     def __init__(self, current_state):
         self.current_state = current_state
-        self.dsp_text = ""
-        self.cursor_text = "" # cursor position lol
 
-        self.cursor_position = 0
-        self.target_position = 0 
-
-    _non_selected_color = (214/255, 96/255, 70/255)
-    _search_symbol = ""
-    _out_of_bounds = 36
-
-    def get_dsp_query(self):
-        offset = max(((self.current_state.cursor_position - 1) // self._out_of_bounds) * self._out_of_bounds, 0)
+        self._sia = DeltaTween(target=0)
+        self._rtt = 0 # results transparency timer
         
-        return self.current_state.query[offset:self._out_of_bounds+offset]
+        self.entries = {} # [EntryObject] -> [EntryShiftTimer, EntryShiftDelayTimer, IsLeaving]
 
+        self.last_page = None
+        self.last_entries_len = None
+        self.NOPE = False
+
+    # i was today years old that i found out that python does 
+    # the parent's method first before the child's method, wow...
+    # (noticed when cursor blinking)
+    
     def update(self, dt):
-        self.dsp_text = self.get_dsp_query()
-        # self.cursor_position += ((self.target_position) - self.cursor_position) * (dt * 20)
+        entries_len = self.current_state.entries_len
+        page = self.current_state.entry_page
+
+        if entries_len != self.last_entries_len or page != self.last_page:
+            start, end = self.current_state.get_page_offset()
+
+            page_entries = self.current_state.entries[start:end]
+
+            for index, (entry, value) in enumerate(self.entries.items()):
+                value[2] = True
+
+            for rel_index, entry in enumerate(page_entries):
+                self.entries[entry] = [0, rel_index * (0.125 * 0.25), False]
+
+            self._sia.change_target(entries_len)
+
+        self._sia.update(dt * 4)
+        self._rtt = max(min(self._rtt + (dt * (3 if entries_len else -3)), 1), 0)
+        
+        new_entries = {}
+
+        for entry, timers in self.entries.items():
+            if timers[1] > 0:
+                timers[1] -= dt
+                continue
+
+            timers[0] = min(timers[0] + dt * 4, 1)
+            
+            print(timers, timers[2])
+            if not timers[2]:
+                print('yes', entry.name)
+                new_entries[entry] = timers
+
+        print(len(new_entries))
+        self.entries = new_entries
+
+        self.last_entries_len = entries_len
+        self.last_page = self.current_state.entry_page
 
     def draw(self, ctx):
-        self.input_bar_draw(ctx)
+        pass
 
-    def input_bar_draw(self, ctx):
-        ctx.set_source_rgba(0.225, 0.225, 0.225, self.current_state.global_alpha)
+    def input_bar_draw(self, ctx, offset):
+        ctx.save()
+        ctx.translate(0, -offset)
+
+        ctx.set_source_rgba(*self.background, 1)
+        common.context.rounded_rectangle(ctx, 0, -self.current_state.input_bar_height * 0.5, self.current_state.width, self.current_state.input_bar_height, 20)
+        ctx.fill()
         
-        common.context.rounded_rectangle(ctx, 0, -30, self.current_state.width, 60, 25)
+        ctx.set_source_rgba(1, 1, 1, 1)
+
+        (query_start, query_end), rel_cursor_position = self.current_state.query.get_bounds(44)
+        query_text = self.current_state.query.input[query_start:query_end]
+        text_bounds = common.context.text_bounds(self.current_state.layout, self.current_state.query.input[:rel_cursor_position])
+         
+        self.current_state.layout.set_font_description(INPUT_BAR_FONT)
+        
+        ctx.save()
+        ctx.translate(45, -20)
+        common.context.text(ctx, self.current_state.layout, text=query_text)
         ctx.fill()
 
         ctx.save()
-        ctx.set_source_rgba(1, 1, 1, self.current_state.global_alpha)
-        ctx.translate(12.5, 20)
-        ctx.set_font_size(60)
-        ctx.select_font_face("Iosevka Term")
-        ctx.show_text(self._search_symbol)
-        ctx.fill()
+        ctx.translate(-30, 0)
+        common.context.text(ctx, self.current_state.layout, text=self.symbol)
         ctx.restore()
 
-
-        ctx.save()
-        ctx.set_source_rgba(1, 1, 1, self.current_state.global_alpha * \
-                self.current_state.p_ct)
-        
-        ctx.move_to(58 + self.cursor_position, -20)
-        ctx.line_to(58 + self.cursor_position, 20)
+        ctx.fill()
+        ctx.set_source_rgba(1, 1, 1, 0.35 + (self.current_state.cursor_transparency * 0.75))
+        ctx.set_line_width(3)
+        ctx.translate(5 - 1.5, 0)
+        ctx.move_to(text_bounds.width, 5)
+        ctx.line_to(text_bounds.width, self.current_state.input_bar_height * 0.8)
         ctx.stroke()
-
-        ctx.set_source_rgba(1, 1, 1, self.current_state.global_alpha)
-        ctx.translate(55, -25)
-        self.current_state.layout.set_font_description(self.current_state.input_bar_font)
-        common.context.text(ctx, self.current_state.layout, self.dsp_text)
-        self.current_state.layout.set_text(self.dsp_text, -1) # TODO: fix cursor position when on previous page from the last
-        self.cursor_position = self.current_state.layout.get_pixel_size().width
-
-        
-        # self.target_position = w
-        ctx.fill()
+        ctx.restore()
 
         ctx.restore()
-        
+        # self.current_state.query.get_bounds()
+
+class DMenu(EntryMenu):
+    symbol = ">"
+
+    def __init__(self, current_state):
+        super().__init__(current_state)
+
+    def entry_update(self, dt):
+        pass
+
+    def draw(self, ctx):
+        self.current_state.layout.set_font_description(INPUT_BAR_FONT)
+
+        height = (self._sia.current() * 40) + 15
+        static_height = (self.current_state.entries_len * 40) + 15
+
+        ctx.set_source_rgba(0.2,0.2,0.2, pytweening.easeInOutQuad(self._rtt))
+
+        abs_y = -height * 0.5
+        static_abs_y = -static_height * 0.5
+
+        common.context.rounded_rectangle(ctx, 0, abs_y, self.current_state.width, height, min(max(height, 40), 20))
+        ctx.fill()
+
+        for index, (entry, [entry_timer, entry_delay_timer, leave]) in \
+                enumerate(self.entries.items()):
+
+            entry_timer = pytweening.easeOutQuint(entry_timer)
+
+            ctx.save()
+            ctx.translate(15 - (200 * (1 - entry_timer)), static_abs_y + (40 * index))
+            ctx.set_source_rgba(1, 1, 1, entry_timer)
+            common.context.text(ctx, self.current_state.layout, entry.name)
+            ctx.restore()
+
+        self.input_bar_draw(ctx, height * 0.5 + 30)
 
 class Main(Looper):
     def __init__(self):
         super().__init__()
 
-        self.current_state = CurrentState()
-       
-        path_directories = os.getenv('PATH').split(os.pathsep)
-        
-        # for directory in path_directories:
-        #    try:
-        #        for file in os.listdir(directory):
-        #            full_path = os.path.join(directory, file) 
+        self._ct = 0 # cursor blink timer
 
-        #            if file in self.current_state.executable_entries or not os.path.isfile(full_path) or not os.access(full_path, os.X_OK):
-        #                continue
-
-        #            self.current_state.executable_entries.append(file)
-        #    except FileNotFoundError:
-        #        pass
-
-        #for path in os.listdir('/usr/share/applications'):
-        #    try:
-        #        new_entry = Entry(os.path.join('/usr/share/applications', path))
-        #        new_entry.validate()
-#
-#                if not new_entry.can_show(self.current_state):
-#                    continue
-#
-#                self.current_state.entries.append(new_entry)
-#            except (ValidationError, ParsingError):
-#                pass
-
-        self.window = Window(WindowType.FullScreen, transparent=True)
-        self.force_grab = False
-        
-        self.container_test = EntryContainer(self.current_state)
-        
+        self.window = Window(WindowType.FullScreen)
+            
         self.main_animator = Animator(self.window)
         self.main_animator.main_draw_callback = self.draw
-        self.window.connect_animated_overlay(self.main_animator)
 
+        self.current_state = CurrentState()
+        self.current_state.active_menu_type = MenuType.Shell
+        self.current_state.query = Textbox()
+        self.current_state.query.home_end_enabled = False
+        self.current_state.searching = False
+        self.current_state.loaded = False
+
+        self.dmenu = DMenu(self.current_state)
+
+        self.window.connect_animated_overlay(self.main_animator)
         self.window.create_window()
         self.window.connect('key_press_event', self.on_key_press)
         self.window.grab()
-
-        self._at = 0 # appearance timer
-
+       
         self.loop_init()
 
+    def contains_subquery(self, substring):
+        return self.current_state.query.input in substring
+
+    def search(self):
+        if self.current_state.searching or not self.current_state.query.input.strip():
+            return
+
+        self.current_state.searching = True
+        self.current_state.loaded = False
+
+        menu_type = self.current_state.active_menu_type
+
+        self.current_state.entries.clear()
+
+        if menu_type == MenuType.Shell:
+            entries = {}
+
+            for path_dir in os.getenv('PATH').split(os.pathsep):
+                if not os.path.isdir(path_dir):
+                    continue
+
+                for rel_file in os.listdir(path_dir):
+                    file = os.path.join(path_dir, rel_file)
+
+                    if not os.path.isfile(file) or not os.access(file, os.X_OK) or not self.contains_subquery(rel_file):
+                        continue
+
+                    new_entry = Entry()
+                    new_entry.name = rel_file
+                    entries[rel_file] = new_entry
+
+            self.current_state.entries = list(entries.values())
+
+        elif menu_type == MenuType.Dmenu:
+            pass
+
+        self.current_state.entries.sort(key=lambda item: item.name)
+        self.current_state.total_entries_len = len(self.current_state.entries)
+        self.current_state.entries_len = min(self.current_state.total_entries_len, self.current_state.view_size)
+        self.current_state.entry_index = min(self.current_state.total_entries_len, self.current_state.entry_index)
+        self.current_state.update_page() # i should prob use some sort of attr change/access function instead of this
+
+        self.current_state.searching = False
+        self.current_state.searched = True
+        self.current_state.loaded = True
+
+    def on_key_press(self, _, event):
+        if event.hardware_keycode == 9:
+            Gtk.main_quit()
+            return True
+        
+        if event.hardware_keycode in [111, 116] and self.current_state.entries_len:
+            self.current_state.entry_index = (self.current_state.entry_index \
+                    + (1 if event.hardware_keycode == 116 else -1)) % \
+                    self.current_state.total_entries_len
+            self.current_state.update_page()
+        elif event.hardware_keycode == 36:
+            if not self.current_state.searching:
+                t = Thread(target=self.search)
+                t.daemon = True
+                t.start()
+        else:
+            self.current_state.query.handle_event(event)
+
+        return True
 
     def update(self, dt):
-        self._at = min(self._at + dt * 2, 1)
-        self.current_state._ct = (self.current_state._ct + dt * 1.5) % 2
-        self.current_state.p_ct = pytweening.easeOutQuad(self.current_state._ct \
-                if self.current_state._ct < 1 else (1 - (self.current_state._ct - 1)))
+        self._ct = (self._ct + dt * 4) % 2
+        
+        self.current_state.cursor_transparency = pytweening.easeOutQuad(\
+                self._ct if self._ct < 1 else (1 - (self._ct - 1)))
 
-        self.container_test.update(dt)
+        self.dmenu.update(dt)
         self.main_animator.draw()
 
     def draw(self, ctx, width, height):
         if self.current_state.layout is None:
             self.current_state.layout = PangoCairo.create_layout(ctx)
 
-        _at = pytweening.easeInOutQuad(self._at)
-        self.current_state.global_alpha = _at
-        ctx.translate((width * 0.5) - (600 * (1 - _at)) - (self.current_state.width * 0.5), height * 0.5)
-        self.container_test.draw(ctx)
+        ctx.translate((width * 0.5) - (self.current_state.width * 0.5), height * 0.5)
+        self.dmenu.draw(ctx)
 
-    def on_key_press(self, _, event):
-        keycode = event.hardware_keycode
-        keyval = event.keyval
-        string = event.string
-        
-        if keycode == 9:
-            Gtk.main_quit()
-            return True
-
-        # print(keycode)
-        
-        if keycode == 110:
-            self.current_state.cursor_position = 0
-        elif keycode == 115:
-            self.current_state.cursor_position = len(self.current_state.query)
-        if keycode in [113, 114]:
-            self.current_state.cursor_position = min(max(self.current_state.cursor_position + (\
-                    -1 if keycode == 113 else 1), 0), len(self.current_state.query))
-        elif keyval == 65288:
-            self.current_state.query = self.current_state.query[:-1]
-        elif keyval in ascii_range:
-            at_last = self.current_state.cursor_position == len(self.current_state.query)
-
-            if at_last:
-                self.current_state.query += chr(keyval)
-                self.current_state.cursor_position = len(self.current_state.query)
-            else:
-                self.current_state.query = self.current_state.query[0:self.current_state.cursor_position] \
-                        + chr(keyval) + self.current_state.query[self.current_state.cursor_position:]
-
-                self.current_state.cursor_position += 1
-
-        return True
-
-    

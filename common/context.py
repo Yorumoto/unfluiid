@@ -14,6 +14,10 @@ PANGO_REDUCE = Pango.SCALE
 
 # context vs ctx, :thinking:
 
+def text_bounds(layout, text="hello"):
+    layout.set_text(text, -1)
+    return layout.get_pixel_size()
+
 def text(context, layout, text="hello"):
     context.save()
 

@@ -4,6 +4,8 @@ import os
 import pytweening
 from i3ipc.events import Event
 
+from components.tween import DeltaTween
+
 import gi
 gi.require_version('Pango', '1.0')
 gi.require_version('PangoCairo', '1.0')
@@ -62,9 +64,7 @@ class WorkspaceCircle:
         ctx.show_text(self._t) 
         ctx.restore()
 
-        return (height * 1) * (_at if not self._atb else 1)
-        
-
+        return (height * 1) * (_at if not self._atb else 1) 
 
 class Main:
     WORKSPACES_MAX = 10
@@ -102,9 +102,7 @@ class Main:
 
         self._view_workspaces = 1
         self._int_view_workspaces = 1
-        self._lvt = 0 # last view workspaces timer value 
-        self._lvtt = self._view_workspaces # last view workspaces tween value
-        self._lvttt = self.i3_workspaces - 1 # last view workspaces target value
+        self._wpt = DeltaTween(target=self.i3_workspaces) # messy lol
         self._lvtr = 0
 
     def urgent(self, _, window):
@@ -163,9 +161,7 @@ class Main:
         _view_workspaces = self.i3_workspaces
        
         if self._int_view_workspaces != _view_workspaces:
-            self._lvt = 0
-            self._lvtt = self._view_workspaces
-            self._lvttt = _view_workspaces - self._lvtt
+            self._wpt.change_target(_view_workspaces)
         
         self._int_view_workspaces = _view_workspaces
         self.on_window_update_title()
@@ -185,14 +181,9 @@ class Main:
                 if self.title_tweening:
                     self.title_tweening_new_passed = False
 
-        if self._lvt < 1:
-            self._view_workspaces = self._lvtt + (self._lvttt * pytweening.easeInOutQuad(self._lvt))
-
-            self._lvt += dt * 3
-
-            if self._lvt > 1:
-                self._lvt = 1
-        
+        self._wpt.update(dt * 4)
+        self._view_workspaces = self._wpt.current()
+ 
         if self._lvtr < 1:
             self._lvtr = min(self._lvtr + dt * 3, 1)
 
