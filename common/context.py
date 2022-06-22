@@ -18,10 +18,15 @@ def text_bounds(layout, text="hello"):
     layout.set_text(text, -1)
     return layout.get_pixel_size()
 
-def text(context, layout, text="hello"):
+def text(context, layout, text="hello", markup=False):
     context.save()
 
-    layout.set_text(text, -1)
+    if markup:
+        layout.set_text("", -1)
+        layout.set_markup(text, -1)
+    else:
+        layout.set_markup("", -1)
+        layout.set_text(text, -1)
 
     PangoCairo.update_layout(context, layout)
     # TODO: pls help, it lowers down a little bit when it comes to unicode

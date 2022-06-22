@@ -33,3 +33,5 @@ Each package's usage:
 
 ### Known Issues
 - The window title (in this case with the `...`) seems to overlap when on a screen resolution apparently smaller than 1920x1080, especially if you have many workspaces open.
+
+- The workspaces section seems to freeze after an i3 configuration reload

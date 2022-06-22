@@ -8,7 +8,7 @@ import shutil
 import subprocess
 
 from xdg import Exceptions as XdgExceptions
-from xdg import DesktopEntry
+from xdg import DesktopEntry, IconTheme
 
 from enum import Enum
 from threading import Thread
@@ -19,15 +19,19 @@ import pytweening
 import common.context
 
 import gi
-gi.require_version('Notify', '0.7')
-from gi.repository import Gtk, GLib, Pango, PangoCairo, Notify
+gi.require_version('Rsvg', '2.0')
+from gi.repository import Gtk, GLib, Pango, PangoCairo, Rsvg
+
+import cairo
 GLib.threads_init()
-Notify.init("_unfluiid__rofi")
 
 import time
 import os
 
 INPUT_BAR_FONT = Pango.FontDescription("Iosevka Term 25")
+
+DESKTOP_FONT_SMALL = Pango.FontDescription("Cantarell Regular 11")
+DESKTOP_FONT_MAIN = Pango.FontDescription("Cantarell Regular 22")
 
 class MenuType(Enum):
     Unknown = -1
@@ -53,14 +57,17 @@ class CurrentState:
     searched = False
     searching = False
     loaded = False
+    in_query_typing = False
     
     notified_of_change = False
 
-    view_size = 15
+    view_size = 10
 
     width = 800
     query : Textbox
     last_query = ""
+
+    cache = {}
 
     def update_page(self):
         self.entry_page = self.entry_index // self.view_size
@@ -120,13 +127,21 @@ class EntryMenu:
         self.last_page = None
         self.last_entries_len = None
 
-    # i was today years old that i found out that python does 
-    # the parent's method first before the child's method, wow...
-    # (noticed when cursor blinking)
-    
+        self._iqt = 0 # in queue time
+        self._iqr = 0 # in queue rotation
+ 
     def update(self, dt):
         page = self.current_state.entry_page
         entries_len = self.current_state.entries_len
+
+        if self.current_state.in_query_typing:
+            self._iqt = min(self._iqt + dt * 10, 2)
+            self._iqr += 10 * dt
+        else:
+            self._iqt = max(self._iqt - dt * 10, 0)
+
+            if self._iqt <= 0:
+                self._iqr = 0
 
         if self.static_abs_y and self.current_state.notified_of_change \
                 or (entries_len != self.last_entries_len or page != self.last_page):
@@ -168,7 +183,7 @@ class EntryMenu:
             else:
                 animatable._at = max(min(animatable._at + dt * (-2 if animatable.leaving else 2), 1), 0)
 
-            animatable._st = max(min(animatable._st + dt * (-8 if (animatable.selected and not animatable.leaving) else 8), 1), 0)
+            animatable._st = max(min(animatable._st + dt * (-9 if (animatable.selected and not animatable.leaving) else 9), 1), 0)
             
             if not animatable.leaving or animatable._at > 0:
                 new_entries[entry] = animatable
@@ -196,11 +211,11 @@ class EntryMenu:
         
         ctx.set_source_rgba(1, 1, 1, 1)
 
+        self.current_state.layout.set_font_description(INPUT_BAR_FONT)
+
         (query_start, query_end), rel_cursor_position = self.current_state.query.get_bounds(44)
         query_text = self.current_state.query.input[query_start:query_end]
-        text_bounds = common.context.text_bounds(self.current_state.layout, self.current_state.query.input[:rel_cursor_position])
-         
-        self.current_state.layout.set_font_description(INPUT_BAR_FONT)
+        text_bounds = common.context.text_bounds(self.current_state.layout, self.current_state.query.input[:rel_cursor_position]) 
         
         ctx.save()
         ctx.translate(45, -20)
@@ -208,11 +223,23 @@ class EntryMenu:
         ctx.fill()
 
         ctx.save()
-        ctx.translate(-30, 0)
-        common.context.text(ctx, self.current_state.layout, text=self.symbol)
+
+        _iqt = pytweening.easeInOutQuad(self._iqt if self._iqt < 1 else (1 - (self._iqt - 1)))
+
+        ctx.set_source_rgba(1, 1, 1, 1 - _iqt)
+
+        if self._iqt >= 1:
+            ctx.set_line_width(3)
+            ctx.set_line_cap(cairo.LineCap.ROUND)
+            ctx.arc(-20, 20, 12, self._iqr, self._iqr + 4.25)
+            ctx.stroke()
+        else:
+            ctx.translate(-27, 0)
+            common.context.text(ctx, self.current_state.layout, text=self.symbol)
+            ctx.fill()
+
         ctx.restore()
 
-        ctx.fill()
         ctx.set_source_rgba(1, 1, 1, 0.35 + (self.current_state.cursor_transparency * 0.75))
         ctx.set_line_width(3)
         ctx.translate(5 - 1.5, 0)
@@ -251,7 +278,6 @@ class ShellMenu(EntryMenu):
         
         for entry, animatable in self.entries.items():
             _at = pytweening.easeInOutQuint(animatable._at)
-            _st = pytweening.easeInOutQuint(animatable._st)
 
             ctx.save()
             ctx.translate(15 - (200 * (1 - _at)), (animatable.start_y or self.static_abs_y) + (40 * animatable.index))
@@ -270,11 +296,21 @@ class DMenu(EntryMenu):
     def execute(self, entry=None):
         pass
 
-    def draw(self, ctx):
-        self.current_state.layout.set_font_description(INPUT_BAR_FONT)
+    _normal_colors = (214/255, 96/255, 70/255)
+    _selected_colors = (242/255, 166/255, 150/255)
+    
+    _diff_colors = (
+        _selected_colors[0] - _normal_colors[0],
+        _selected_colors[1] - _normal_colors[1],
+        _selected_colors[2] - _normal_colors[2],
+    )
 
-        height = (self._sia.current() * 40) + 15
-        static_height = (self.current_state.entries_len * 40) + 15
+    entry_height = 80
+    fit_icon_size = 64
+
+    def draw(self, ctx):
+        height = (self._sia.current() * self.entry_height) + 15
+        static_height = (self.current_state.entries_len * self.entry_height) + 15
 
         ctx.set_source_rgba(0.2,0.2,0.2, pytweening.easeInOutQuad(self._rtt))
 
@@ -286,12 +322,67 @@ class DMenu(EntryMenu):
         
         for entry, animatable in self.entries.items():
             _at = pytweening.easeInOutQuint(animatable._at)
-            _st = pytweening.easeInOutQuint(animatable._st)
+            _st = 1 - animatable._st
 
             ctx.save()
-            ctx.translate(15 - (200 * (1 - _at)), (animatable.start_y or self.static_abs_y) + (40 * animatable.index))
-            ctx.set_source_rgba(1, 1, 1, _at * (0.35 + ((animatable.selected and not animatable.leaving) * 0.65)))
-            common.context.text(ctx, self.current_state.layout, entry.name)
+            ctx.translate(10 - (200 * (1 - _at)), 10 + (animatable.start_y or self.static_abs_y) + \
+                    (self.entry_height * animatable.index))
+            
+            context_color = (
+                self._normal_colors[0] + (self._diff_colors[0] * _st),
+                self._normal_colors[1] + (self._diff_colors[1] * _st),
+                self._normal_colors[2] + (self._diff_colors[2] * _st),
+            )
+
+            ctx.set_source_rgba(*context_color, _at)
+
+            common.context.rounded_rectangle(ctx, 0, 0, self.current_state.width-20, self.entry_height - 5, 15)
+
+            ctx.fill()
+            
+            ctx.set_source_rgba(0, 0, 0, _at)
+            
+            self.current_state.layout.set_font_description(DESKTOP_FONT_MAIN)
+
+            shift_x = 80 if entry.icon else 20
+
+            if entry.icon:
+                ctx.save()
+
+                if isinstance(entry.icon, Rsvg.Handle): # svg
+                    # TODO: support svgs
+                    # ctx.set_source_rgba(1, 1, 1, _at)
+                    # dimensions = entry.icon.get_dimensions()
+                    # entry.icon.render_cairo(ctx)
+                    pass
+                elif isinstance(entry.icon, cairo.ImageSurface): # png
+                    sx = self.fit_icon_size / entry.icon.get_width()
+                    sy = self.fit_icon_size / entry.icon.get_height()
+                    
+                    ctx.scale(sx, sy)
+                    ctx.set_source_surface(entry.icon, 5, 5)
+                    ctx.paint_with_alpha(_at)
+
+                ctx.restore()
+
+            ctx.save()
+
+            ctx.move_to(shift_x, 2)
+            common.context.text(ctx, self.current_state.layout, f"<b>{entry.name}</b>", markup=True)
+            ctx.fill()
+
+            self.current_state.layout.set_font_description(DESKTOP_FONT_SMALL)
+
+            ctx.move_to(shift_x + 2, 37)
+            common.context.text(ctx, self.current_state.layout, entry.short_description or entry.description)
+
+            # don't overload user information!!
+            # if entry.description:
+            #    ctx.move_to(shift_x + 2, 54 if entry.short_description else 37)
+            #    common.context.text(ctx, self.current_state.layout, f"{entry.description}")
+
+            ctx.restore()
+
             ctx.restore()
 
         self.input_bar_draw(ctx, height * 0.5 + 30)
@@ -329,7 +420,9 @@ class Main(Looper):
         self.current_menu = self.dmenu
         self.menus = [self.dmenu, self.shell_menu]
 
-        self.search()
+        self.search_blocked = True
+        self.search_time_timer = 0
+        
         self.loop_init()
 
     def update(self, dt):
@@ -338,17 +431,25 @@ class Main(Looper):
         self.current_state.cursor_transparency = pytweening.easeOutQuad(\
                 self._ct if self._ct < 1 else (1 - (self._ct - 1)))
 
-        self.shell_menu.update(dt)
+        if self.search_time_timer <= 0:
+            if not self.search_blocked and not self.current_state.searching:
+                self.search()
+                self.search_blocked = True
+        else:
+            self.search_time_timer -= dt
+        
+        self.dmenu.update(dt)
         self.main_animator.draw()
 
     def draw(self, ctx, width, height):
         if self.current_state.layout is None:
             self.current_state.layout = PangoCairo.create_layout(ctx)
+            self.current_state.layout.set_markup
 
         ctx.translate((width * 0.5) - (self.current_state.width * 0.5), height * 0.5)
         self.dmenu.draw(ctx)
 
-    def _search(self, force_search=False):
+    def _search(self):
         self.current_state.abs_empty = not self.current_state.query.input
 
         self.current_state.searching = True
@@ -359,11 +460,7 @@ class Main(Looper):
         new_entries = []
 
         if menu_type == MenuType.Shell:
-            first_command = self.current_state.query.input.split(' ')[0].strip()
             entries = {}
-
-            can_be_executed = False
-            notification_shut_up = os.path.isdir(os.path.join(CACHE_DIRECTORY, 'shutupexec'))
 
             for path_dir in os.getenv('PATH').split(os.pathsep):
                 if not os.path.isdir(path_dir):
@@ -375,12 +472,6 @@ class Main(Looper):
                     if not os.path.isfile(file) or not os.access(file, os.X_OK):
                         continue
                     
-                    if first_command == rel_file and not can_be_executed:
-                        if not notification_shut_up:
-                            self.alert_for_direct_execution()
-                            os.mkdir(os.path.join(CACHE_DIRECTORY, 'shutupexec'))
-                        can_be_executed = True
-
                     if not self.contains_subquery(rel_file):
                         continue
 
@@ -390,10 +481,70 @@ class Main(Looper):
 
             new_entries = list(entries.values())
         elif menu_type == MenuType.Dmenu:
+            desktop_session = os.getenv('DESKTOP_SESSION')
+
+            if not self.current_state.cache.get('d_entries'):
+                self.current_state.cache['d_entries'] = {}
+            
+            if not self.current_state.cache.get('icons'):
+                self.current_state.cache['icons'] = {}
+
             for rel_entry_filename in os.listdir('/usr/share/applications'):
                 try:
                     entry_filename = os.path.join('/usr/share/applications', rel_entry_filename)
+                    cached_desktop_entry = self.current_state.cache['d_entries'].get(rel_entry_filename)
+                    
+                    if cached_desktop_entry is None:
+                        desktop_entry = DesktopEntry.DesktopEntry(entry_filename)
+                    else:
+                        desktop_entry = cached_desktop_entry
+                    
+                    do_not_show_in = desktop_entry.getNotShowIn()
+                    only_show_in = desktop_entry.getOnlyShowIn()
 
+                    if not (not desktop_entry.getHidden() and
+                            not desktop_entry.getNoDisplay() and\
+                            (not do_not_show_in or desktop_session not in do_not_show_in) and \
+                            (not only_show_in or desktop_session in only_show_in)): 
+                        continue
+
+                    if cached_desktop_entry is None:
+                        self.current_state.cache['d_entries'][rel_entry_filename] = desktop_entry
+                    
+                    entry_name = desktop_entry.getName()
+                    
+                    if not self.contains_subquery(entry_name):
+                        continue
+
+                    cached_desktop_icon = self.current_state.cache['icons'].get(rel_entry_filename)
+                    desktop_icon = None
+                    
+                    if cached_desktop_icon is None:
+                        abs_icon_path = IconTheme.getIconPath(desktop_entry.getIcon())
+
+                        if abs_icon_path is not None:
+                            _, ext = os.path.splitext(abs_icon_path)
+
+                            if ext == '.png':
+                                desktop_icon = cairo.ImageSurface.create_from_png(abs_icon_path) 
+                            elif ext == '.svg':
+                                desktop_icon = Rsvg.Handle.new_from_file(abs_icon_path)
+                            else:
+                                print(f"Unknown icon extension of {abs_icon_path}")
+
+                        if desktop_icon is not None:
+                            self.current_state.cache['icons'][rel_entry_filename] = desktop_icon
+                    else:
+                        desktop_icon = cached_desktop_icon
+
+
+                    new_entry = Entry()
+                    new_entry.name = entry_name
+                    new_entry.icon = desktop_icon
+                    new_entry.short_description = desktop_entry.getGenericName()
+                    new_entry.description = desktop_entry.getComment()
+                    new_entries.append(new_entry)
+                    
                 except (XdgExceptions.ParsingError, XdgExceptions.DuplicateGroupError, \
                         XdgExceptions.NoGroupError, XdgExceptions.DuplicateKeyError, \
                         XdgExceptions.NoKeyError):
@@ -433,25 +584,23 @@ class Main(Looper):
                     self.current_state.total_entries_len
             self.current_state.update_page()
         elif event.hardware_keycode == 36:
-            in_shell_menu = self.current_menu is self.shell_menu
-            
-            if in_shell_menu and controlled:
-                self.shell_menu.execute()
-
-            self.search(force_search=in_shell_menu and controlled)
-        else:
+            pass
+        elif not self.current_state.searching:
             self.current_state.query.handle_event(event)
+            self.search_blocked = False
+            self.current_state.in_query_typing = True
+            self.search_time_timer = 0.5
 
         return True
 
     def contains_subquery(self, substring):
-        return self.current_state.abs_empty or self.current_state.query.input in substring
+        return self.current_state.abs_empty or self.current_state.query.input.lower() in substring.lower()
 
-    def search(self, force_search=False):
+    def search(self):
         if self.current_state.searching:
             return
 
-        searching_thread = Thread(target=self._search, kwargs={'force_search':force_search})
+        searching_thread = Thread(target=self._search)
         # searching_thread.daemon = True
         searching_thread.run()
 
@@ -459,6 +608,7 @@ class Main(Looper):
         self.current_state.searching = False
         self.current_state.searched = True
         self.current_state.loaded = True
+        self.current_state.in_query_typing = False
 
     def alert_for_direct_execution(self):
         Notify.Notification.new(
