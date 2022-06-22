@@ -54,17 +54,24 @@ class Window(Gtk.Window):
     _grab_event_mask_pointer = Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
     _grab_event_mask_keyboard = Gdk.EventMask.KEY_PRESS_MASK | Gdk.EventMask.KEY_RELEASE_MASK
 
-    def _grab(self):
+    def _grab(self, no_pointer=False, no_keyboard=False):
         _current_time = Gdk.CURRENT_TIME
         _last_cursor = Gdk.Cursor(Gdk.CursorType.LAST_CURSOR)
-        return self.pointer_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_pointer, _last_cursor, _current_time) == Gdk.GrabStatus.SUCCESS and self.keyboard_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_keyboard, _last_cursor, _current_time) == Gdk.GrabStatus.SUCCESS
 
-    def grab(self): 
+        pointer_result = self.pointer_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_pointer, _last_cursor, _current_time) \
+                if not no_pointer else Gdk.GrabStatus.SUCCESS
+
+        keyboard_result = self.keyboard_device.grab(self.toplevel, Gdk.GrabOwnership.NONE, False, self._grab_event_mask_keyboard, _last_cursor, _current_time) \
+                if not no_keyboard else Gdk.GrabStatus.SUCCESS
+
+        return pointer_result == Gdk.GrabStatus.SUCCESS and keyboard_result == Gdk.GrabStatus.SUCCESS
+
+    def grab(self, **args): 
         if self.force_grab:
-            while not self._grab():
+            while not self._grab(**args):
                     pass
         else:
-            if not self._grab():
+            if not self._grab(**args):
                 raise SystemExit("Failed to grab input, exiting...")
 
         self.x11_toplevel.map()
@@ -91,11 +98,11 @@ class Window(Gtk.Window):
         if self.window_type == WindowType.Bar:
             # reserve some space
             # https://gist.github.com/johnlane/351adff97df196add08a
-            
 
             self.x11_toplevel.change_property(display.intern_atom('_NET_WM_STRUT'), display.intern_atom('CARDINAL'), 32, [0, 0, self._bar_size, 0], X.PropModeReplace)
             self.x11_toplevel.change_property(display.intern_atom('_NET_WM_STRUT_PARTIAL'), display.intern_atom('CARDINAL'), 32, [0, 0, self._bar_size, 0, 0, 0, 0, 0, 0, 0], X.PropModeReplace)
         elif self.window_type == WindowType.FullScreen:
+            self.set_keep_above(True) 
             # override-redirect
             self.x11_toplevel.change_attributes(override_redirect=1)
             self.x11_toplevel.set_wm_protocols([display.intern_atom('WM_TAKE_FOCUS')])
