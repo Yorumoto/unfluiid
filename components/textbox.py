@@ -9,7 +9,7 @@ class Textbox:
     def __init__(self):
         self.input = ""
         self.cursor_position = 0
-
+        self.input_disabled = False
         self.home_end_enabled = True
 
     def get_bounds(self, view_side=20):
@@ -24,6 +24,9 @@ class Textbox:
 
     def num_lock(self, event):
         return bool(event.state & Gdk.ModifierType.MOD2_MASK)
+
+    def modded(self, event):
+        return bool(event.state & Gdk.ModifierType.MOD1_MASK)
 
     def controlled(self, event):
         return bool(event.state & Gdk.ModifierType.CONTROL_MASK)
@@ -46,6 +49,9 @@ class Textbox:
             controlled = self.controlled(event)
         
         c = False # changed
+        
+        if self.input_disabled:
+            return c
 
         if event.hardware_keycode == 110 and self.home_end_enabled:
             self.cursor_position = 0

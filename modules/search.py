@@ -5,8 +5,10 @@ from components.looper import Looper
 from components.tween import DeltaTween
 
 import shutil
+import shlex
 import subprocess
 
+from math import pi
 from xdg import Exceptions as XdgExceptions
 from xdg import DesktopEntry, IconTheme
 
@@ -50,10 +52,21 @@ class CurrentState:
     total_entries_len = 0 # update pls
     
     entry_index = 0
+    selected_entry_index = 0 # it's ALWAYSSS THE FIRST ITEM WITHOUT HTIS
     entry_page = 0
+
+    current_menu = None
 
     cursor_transparency = 0
     loaded_transparency = 0
+
+    appearance_timer = 0
+
+    _list_exited = False
+    _at = 0
+
+    can_execute = False
+    exiting = False
 
     searched = False
     searching = False
@@ -69,6 +82,50 @@ class CurrentState:
     last_query = ""
 
     cache = {}
+    
+    exit_timer = 0
+
+    def go_empty_state(self): 
+        # self.exit_timer = bool(self.loaded and self.entries)
+
+        self.loaded = False
+        
+        self.entry_index = 0
+        self.total_entries_len = 0
+        self.notified_of_change = True
+        # self.entries_len = 0
+
+    def start_search(self):
+        self.entries.sort(key=lambda item: (len(item.name), item.name))
+        self.total_entries_len = len(self.entries)
+        self.entries_len = min(self.total_entries_len, self.view_size)
+        self.entry_index = min(max(self.total_entries_len - 1, 0), self.entry_index)
+
+        self.update_page() # i should prob use some sort of attr change/access function instead of this
+        self.searching = True
+        self.loaded = False
+
+    def finish_search(self):
+        self.searching = False
+        self.searched = True
+        self.loaded = True
+        self.in_query_typing = False
+        self.notified_of_change = self.last_query != \
+                self.query.input
+        self.last_query = self.query.input
+
+    def exit(self):
+        if self.exiting:
+           return 
+
+        self.query.input_disabled = True
+        self.exiting = True
+        self.go_empty_state()
+
+    def execute(self):
+        self.selected_entry_index = self.entry_index
+        self.exit()
+        self.can_execute = True
 
     def update_page(self):
         self.entry_page = self.entry_index // self.view_size
@@ -85,6 +142,9 @@ class Entry:
     actions = []
     short_description = ""
     description = ""
+
+    execute = ""
+
     icon = None
 
     run_via_terminal = False
@@ -103,7 +163,17 @@ class AnimatableEntry:
     _del_t = 0 # appearance delay timer
     _st = 0 # selected timer
 
-    
+ 
+class EntryIconImageType(Enum):
+    Unknown = -1
+    PNG = 0
+    SVG = 1
+
+class EntryIcon:
+    format_type = EntryIconImageType.Unknown
+    icon = None
+    width = 0
+    height = 0
 
 class EntryMenu:
     symbol = ""
@@ -118,6 +188,8 @@ class EntryMenu:
         self.static_abs_y = None
         self.first_entry = None
 
+        self.test = 0
+
         self._sia = DeltaTween(target=0)
         self._rtt = 0 # results transparency timer
         
@@ -127,22 +199,10 @@ class EntryMenu:
         self.page_offset = 0
         self.last_page = None
         self.last_entries_len = None
-
-        self._iqt = 0 # in queue time
-        self._iqr = 0 # in queue rotation
  
     def update(self, dt):
         page = self.current_state.entry_page
         entries_len = self.current_state.entries_len
-
-        if self.current_state.in_query_typing:
-            self._iqt = min(self._iqt + dt * 10, 2)
-            self._iqr += 10 * dt
-        else:
-            self._iqt = max(self._iqt - dt * 10, 0)
-
-            if self._iqt <= 0:
-                self._iqr = 0
 
         if self.static_abs_y and self.current_state.notified_of_change \
                 or (entries_len != self.last_entries_len or page != self.last_page):
@@ -156,24 +216,26 @@ class EntryMenu:
                 animatable.start_y = self.static_abs_y
                 animatable.leaving = True
 
-            self.first_entry = None
+            if self.current_state.loaded:
+                self.first_entry = None
 
-            for index, entry in enumerate(page_entries):
-                new_animatable = AnimatableEntry()
-                new_animatable.index = index
-                # i kinda don't like the adding each item slowly one by one, it looks kinda slow
-                # new_animatable._del_t = index * 0.0175
+                for index, entry in enumerate(page_entries):
+                    new_animatable = AnimatableEntry()
+                    new_animatable.index = index
+                    # i kinda don't like the adding each item slowly one by one, it looks kinda slow
+                    # new_animatable._del_t = index * 0.0175
 
-                if self.first_entry is None:
-                    self.first_entry = new_animatable
+                    if self.first_entry is None:
+                        self.first_entry = new_animatable
 
-                self.entries[entry] = new_animatable
-
+                    self.entries[entry] = new_animatable
+                
             self._sia.change_target(entries_len)
             self.current_state.notified_of_change = False
 
         self._sia.update(dt * 4)
-        self._rtt = max(min(self._rtt + (dt * (16 if self.current_state.entries_len else -16)), 1), 0)
+        self._rtt = max(min(self._rtt + (dt * (16 if self.current_state.entries_len \
+                and self.current_state.loaded else -16)), 1), 0)
         
         # new_entries = {}
         
@@ -185,7 +247,7 @@ class EntryMenu:
             if animatable._del_t > 0:
                 animatable._del_t -= dt
             else:
-                animatable._at = max(min(animatable._at + dt * (-2 if animatable.leaving else 2), 1), 0)
+                animatable._at = max(min(animatable._at + dt * (-2.5 if animatable.leaving else 2.5), 1), 0)
 
             animatable._st = max(min(animatable._st + dt * (-9 if (animatable.selected and not animatable.leaving) else 9), 1), 0)
             
@@ -207,17 +269,19 @@ class EntryMenu:
 
     def input_bar_draw(self, ctx, offset):
         ctx.save()
-        ctx.translate(0, -offset)
+        _at = self.current_state.appearance_timer
 
-        ctx.set_source_rgba(*self.background, 1)
+        ctx.translate((1 - _at) * -400, -offset)
+
+        ctx.set_source_rgba(*self.background, _at)
         
         common.context.rounded_shadow(ctx, 0, -self.current_state.input_bar_height * 0.5, self.current_state.width, self.current_state.input_bar_height, 
-                20, width_offset=15, height_offset=15, color=(0.1, 0.1, 0.1))
+                20, width_offset=15, height_offset=15, color=(0.1, 0.1, 0.1), global_alpha=_at)
 
         common.context.rounded_rectangle(ctx, 0, -self.current_state.input_bar_height * 0.5, self.current_state.width, self.current_state.input_bar_height, 20)
         ctx.fill()
         
-        ctx.set_source_rgba(1, 1, 1, 1)
+        ctx.set_source_rgba(1, 1, 1, _at)
 
         self.current_state.layout.set_font_description(INPUT_BAR_FONT)
 
@@ -232,23 +296,14 @@ class EntryMenu:
 
         ctx.save()
 
-        _iqt = pytweening.easeInOutQuad(self._iqt if self._iqt < 1 else (1 - (self._iqt - 1)))
 
-        ctx.set_source_rgba(1, 1, 1, 1 - _iqt)
-
-        if self._iqt >= 1:
-            ctx.set_line_width(3)
-            ctx.set_line_cap(cairo.LineCap.ROUND)
-            ctx.arc(-20, 20, 12, self._iqr, self._iqr + 4.25)
-            ctx.stroke()
-        else:
-            ctx.translate(-27, 0)
-            common.context.text(ctx, self.current_state.layout, text=self.symbol)
-            ctx.fill()
-
+        ctx.set_source_rgba(1, 1, 1, _at)
+        ctx.translate(-27, 0)
+        common.context.text(ctx, self.current_state.layout, text=self.symbol)
+        ctx.fill()
         ctx.restore()
 
-        ctx.set_source_rgba(1, 1, 1, 0.35 + (self.current_state.cursor_transparency * 0.75))
+        ctx.set_source_rgba(1, 1, 1, (0.35 + (self.current_state.cursor_transparency * 0.75)) * _at)
         ctx.set_line_width(3)
         ctx.translate(5 - 1.5, 0)
         ctx.move_to(text_bounds.width, 5)
@@ -259,50 +314,14 @@ class EntryMenu:
         ctx.restore()
         # self.current_state.query.get_bounds()
 
-class ShellMenu(EntryMenu):
-    symbol = ">"
-    query = 0
-    menu_type = MenuType.Shell
-
-    def __init__(self, current_state):
-        super().__init__(current_state)
-
-    def execute(self, entry=None):
-        pass
-
-    def draw(self, ctx):
-        self.current_state.layout.set_font_description(INPUT_BAR_FONT)
-
-        height = (self._sia.current() * 40) + 15
-        static_height = (self.current_state.entries_len * 40) + 15
-
-        ctx.set_source_rgba(0.2,0.2,0.2, pytweening.easeInOutQuad(self._rtt))
-
-        self.abs_y = -height * 0.5
-        self.static_abs_y = -static_height * 0.5
-
-        common.context.rounded_rectangle(ctx, 0, self.abs_y, self.current_state.width, height, min(max(height, 40), 20))
-        ctx.fill()
-        
-        for entry, animatable in self.entries.items():
-            _at = pytweening.easeInOutQuint(animatable._at)
-
-            ctx.save()
-            ctx.translate(15 - (200 * (1 - _at)), (animatable.start_y or self.static_abs_y) + (40 * animatable.index))
-            ctx.set_source_rgba(1, 1, 1, _at * (0.35 + ((animatable.selected and not animatable.leaving) * 0.65)))
-            common.context.text(ctx, self.current_state.layout, entry.name)
-            ctx.restore()
-
-        self.input_bar_draw(ctx, height * 0.5 + 30)
+START_CIRCLE = -90 * (pi / 180)
+DOUBLE_PI = pi * 2
 
 class DMenu(EntryMenu):
     menu_type = MenuType.Dmenu
 
     def __init__(self, current_state):
         super().__init__(current_state)
-
-    def execute(self, entry=None):
-        pass
 
     _normal_colors = (214/255, 96/255, 70/255)
     _selected_colors = (242/255, 166/255, 150/255)
@@ -320,7 +339,7 @@ class DMenu(EntryMenu):
         height = (self._sia.current() * self.entry_height) + 15
         static_height = (self.current_state.entries_len * self.entry_height) + 15
 
-        _rtt = pytweening.easeInOutQuad(self._rtt)
+        _rtt = pytweening.easeInOutQuad(self._rtt) * self.current_state.appearance_timer
 
         ctx.set_source_rgba(0.2,0.2,0.2, _rtt)
 
@@ -339,9 +358,19 @@ class DMenu(EntryMenu):
         ctx.translate(15, self.abs_y + height)
         ctx.set_source_rgba(1, 1, 1, _rtt)
         self.current_state.layout.set_font_description(INPUT_BAR_FONT)
-        
+       
         common.context.text(ctx, self.current_state.layout, 
                 f"{self.current_state.entry_index+1}/{self.current_state.total_entries_len}")
+        
+        ctx.move_to(self.current_state.width - 30, 0)
+
+        if self.current_state.entries:
+            right_text = self.current_state.entries[self.current_state.entry_index].name
+            text = common.context.text_bounds(self.current_state.layout, right_text)
+            ctx.move_to(self.current_state.width - 40 - text.width, 0)
+            common.context.text(ctx, self.current_state.layout, right_text)
+
+        self.current_state.layout.set_alignment(Pango.Alignment.LEFT)
 
         ctx.fill()
         ctx.restore()
@@ -350,9 +379,10 @@ class DMenu(EntryMenu):
         for entry, animatable in self.entries.items():
             _at = pytweening.easeInOutQuint(animatable._at)
             _st = 1 - animatable._st
+            # _sst = pytweening.easeInOutQuad(_st)
 
             ctx.save()
-            ctx.translate(10 - (200 * (1 - _at)), 10 + (animatable.start_y or self.static_abs_y) + \
+            ctx.translate(10 - (300 * (1 - _at)), 10 + (animatable.start_y or self.static_abs_y) + \
                     (self.entry_height * animatable.index))
             
             context_color = (
@@ -381,18 +411,23 @@ class DMenu(EntryMenu):
             if entry.icon:
                 ctx.save()
 
-                if isinstance(entry.icon, Rsvg.Handle): # svg
-                    # TODO: support svgs
-                    # ctx.set_source_rgba(1, 1, 1, _at)
-                    # dimensions = entry.icon.get_dimensions()
-                    # entry.icon.render_cairo(ctx)
+                if entry.icon.format_type == EntryIconImageType.SVG: # svg
+                    # TODO: is there any way i can render svgs with alpha
+                    # ctx.push_group()
+                    # entry.icon.icon.render_cairo(ctx)
+                    # pattern = ctx.pop_group()
+                    # ctx.mask(pattern)
                     pass
-                elif isinstance(entry.icon, cairo.ImageSurface): # png
-                    sx = self.fit_icon_size / entry.icon.get_width()
-                    sy = self.fit_icon_size / entry.icon.get_height()
-                    
-                    ctx.scale(sx, sy)
-                    ctx.set_source_surface(entry.icon, 5, 5)
+                elif entry.icon.format_type == EntryIconImageType.PNG: # png
+                    ctx.scale(self.fit_icon_size / entry.icon.width, self.fit_icon_size / entry.icon.height)
+                    # icon_width = min(icon_width, self.fit_icon_size)
+                    # icon_height = min(icon_height, self.fit_icon_size)
+                    ctx.translate(
+                        (40 * (entry.icon.width / self.fit_icon_size)),
+                        (self.entry_height * 0.5 * (entry.icon.height / self.fit_icon_size)) - 2
+                    )
+
+                    ctx.set_source_surface(entry.icon.icon, -(entry.icon.width * 0.5), -(entry.icon.height * 0.5))
                     ctx.paint_with_alpha(_at)
 
                 ctx.restore()
@@ -418,11 +453,133 @@ class DMenu(EntryMenu):
             ctx.restore()
 
         self.input_bar_draw(ctx, height * 0.5 + 30)
+        
 
-CACHE_DIRECTORY = os.path.expanduser(os.path.join('~', '.cache', 'ebirika', 'unfluiid'))
+    def contains_subquery(self, substring):
+        return self.current_state.abs_empty or self.current_state.query.input.lower() in substring.lower()
+   
+    def execute(self):
+        try:
+            current_entry = self.current_state.entries[self.current_state.selected_entry_index]
+            print(current_entry.name, current_entry.execute, self.current_state.entry_index)
+            command = shlex.split(current_entry.execute)
 
-if not os.path.isdir(CACHE_DIRECTORY):
-    os.makedirs(CACHE_DIRECTORY)
+            if current_entry.run_via_terminal:
+                command = ['nohup', 'i3-sensible-terminal', '-e'] + command
+            else:
+                command = ['nohup'] + command
+
+            subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except IndexError:
+            pass # a chance
+
+    def search(self):
+        self.current_state.start_search()
+
+        desktop_session = os.getenv('DESKTOP_SESSION')
+        new_entries = []
+
+        if not self.current_state.cache.get('d_entries'):
+            self.current_state.cache['d_entries'] = {}
+        
+        if not self.current_state.cache.get('icons'):
+            self.current_state.cache['icons'] = {}
+
+        for rel_entry_filename in os.listdir('/usr/share/applications'):
+            try:
+                entry_filename = os.path.join('/usr/share/applications', rel_entry_filename)
+                cached_desktop_entry = self.current_state.cache['d_entries'].get(rel_entry_filename)
+                
+                if cached_desktop_entry is None:
+                    desktop_entry = DesktopEntry.DesktopEntry(entry_filename)
+                else:
+                    desktop_entry = cached_desktop_entry
+                
+                do_not_show_in = desktop_entry.getNotShowIn()
+                only_show_in = desktop_entry.getOnlyShowIn()
+
+                if not (not desktop_entry.getHidden() and
+                        not desktop_entry.getNoDisplay() and\
+                        (not do_not_show_in or desktop_session not in do_not_show_in) and \
+                        (not only_show_in or desktop_session in only_show_in)): 
+                    continue
+
+                if cached_desktop_entry is None:
+                    self.current_state.cache['d_entries'][rel_entry_filename] = desktop_entry
+                
+                entry_name = desktop_entry.getName() 
+                
+                if not self.contains_subquery(entry_name):
+                    # i've thought of a concise way that fits in the guard clause statement
+                    # but can't get it done there so i'll do this instead
+                    entry_keywords = desktop_entry.getKeywords()
+                
+                    for keyword in entry_keywords:
+                        if not self.contains_subquery(keyword.lower()):
+                            continue
+                        break
+                    else:
+                        continue
+
+                cached_desktop_icon = self.current_state.cache['icons'].get(rel_entry_filename)
+                desktop_icon = None
+                
+                if cached_desktop_icon is None:
+                    abs_icon_path = IconTheme.getIconPath(desktop_entry.getIcon())
+
+                    if abs_icon_path is not None:
+                        _, ext = os.path.splitext(abs_icon_path)
+
+                        if ext == '.png':
+                            desktop_icon = EntryIcon()
+                            desktop_icon.icon = cairo.ImageSurface.create_from_png(abs_icon_path)
+                            desktop_icon.width = desktop_icon.icon.get_width()
+                            desktop_icon.height = desktop_icon.icon.get_height()
+                            desktop_icon.format_type = EntryIconImageType.PNG
+                        elif ext == '.svg':
+                            pass
+                        #    desktop_icon = EntryIcon()
+
+                        #    handle = Rsvg.Handle.new_from_file(abs_icon_path)
+                        #    dimensions = handle.get_dimensions()
+
+                        #    desktop_icon.icon = handle
+                        #    desktop_icon.width = dimensions.width
+                        #    desktop_icon.height = dimensions.height
+                        #    desktop_icon.format_type = EntryIconImageType.SVG
+                        else:
+                            print(f"Unknown icon extension of {abs_icon_path}")
+
+                    if desktop_icon is not None:
+                        self.current_state.cache['icons'][rel_entry_filename] = desktop_icon
+                else:
+                    desktop_icon = cached_desktop_icon
+
+
+                new_entry = Entry()
+                new_entry.name = entry_name
+                new_entry.icon = desktop_icon
+                new_entry.short_description = desktop_entry.getGenericName()
+                new_entry.description = desktop_entry.getComment()
+                new_entry.run_via_terminal = desktop_entry.getTerminal()
+                new_entry.execute = desktop_entry.getExec().replace("%U", "")\
+                        .replace("%u", "").replace("%F", "").replace("%f", "")
+                
+                new_entries.append(new_entry)
+                
+            except (XdgExceptions.ParsingError, XdgExceptions.DuplicateGroupError, \
+                    XdgExceptions.NoGroupError, XdgExceptions.DuplicateKeyError, \
+                    XdgExceptions.NoKeyError):
+                pass
+
+        self.current_state.entries = new_entries
+        self.current_state.entries.sort(key=lambda item: (len(item.name), item.name))
+        self.current_state.total_entries_len = len(self.current_state.entries)
+        self.current_state.entries_len = min(self.current_state.total_entries_len, self.current_state.view_size)
+        self.current_state.entry_index = min(max(self.current_state.total_entries_len - 1, 0), self.current_state.entry_index)
+        self.current_state.update_page() # i should prob use some sort of attr change/access function instead of this
+      
+        self.current_state.finish_search()
 
 class Main(Looper):
     def __init__(self):
@@ -440,6 +597,7 @@ class Main(Looper):
         self.current_state.query.home_end_enabled = False
         self.current_state.searching = False
         self.current_state.loaded = False
+        self.current_state.search_timer = 0
 
         self.shell_menu = ShellMenu(self.current_state)
         self.dmenu = DMenu(self.current_state)
@@ -449,26 +607,42 @@ class Main(Looper):
         self.window.connect('key_press_event', self.on_key_press)
         self.window.grab(no_pointer=True)
      
-        self.current_menu = self.dmenu
-        self.menus = [self.dmenu, self.shell_menu]
+        self.current_state.current_menu = self.shell_menu
 
-        self.search_blocked = True
-        self.search_time_timer = 0
+        self.menus = [self.dmenu, None]
         
+        self.autostart_search_timer = 1
         self.loop_init()
 
     def update(self, dt):
+        if self.autostart_search_timer <= 0:
+            self.search()
+            self.autostart_search_timer = 1e11
+        else:
+            self.autostart_search_timer -= dt
+
         self._ct = (self._ct + dt * 4) % 2
-        
-        self.current_state.cursor_transparency = pytweening.easeOutQuad(\
+       
+        self.current_state.cursor_transparency = pytweening.easeInOutQuad(\
                 self._ct if self._ct < 1 else (1 - (self._ct - 1)))
 
-        if self.search_time_timer <= 0:
-            if not self.search_blocked and not self.current_state.searching:
-                self.search()
-                self.search_blocked = True
+        if self.current_state.exiting:
+            if self.current_state.exit_timer <= 0:
+                self.current_state._at = max(self.current_state._at + dt * -4, 0)
+
+                if self.current_state._at <= 0:
+                    if self.current_state.can_execute:
+                        self.current_state.current_menu.execute()
+
+                    Gtk.main_quit()
+                    return
+                
+            else:
+                self.current_state.exit_timer -= dt 
         else:
-            self.search_time_timer -= dt
+            self.current_state._at = min(self.current_state._at + dt * 4, 1)
+
+        self.current_state.appearance_timer = pytweening.easeInOutQuad(self.current_state._at)
         
         self.dmenu.update(dt)
         self.main_animator.draw()
@@ -478,173 +652,48 @@ class Main(Looper):
             self.current_state.layout = PangoCairo.create_layout(ctx)
             self.current_state.layout.set_markup
 
+        ctx.fill()
         ctx.translate((width * 0.5) - (self.current_state.width * 0.5), height * 0.5)
         self.dmenu.draw(ctx)
 
-    def _search(self):
-        self.current_state.abs_empty = not self.current_state.query.input
-
-        self.current_state.searching = True
-        self.current_state.loaded = False
-
-        menu_type = self.current_menu.menu_type
-
-        new_entries = []
-
-        if menu_type == MenuType.Shell:
-            entries = {}
-
-            for path_dir in os.getenv('PATH').split(os.pathsep):
-                if not os.path.isdir(path_dir):
-                    continue
-        
-                for rel_file in os.listdir(path_dir):
-                    file = os.path.join(path_dir, rel_file)
-
-                    if not os.path.isfile(file) or not os.access(file, os.X_OK):
-                        continue
-                    
-                    if not self.contains_subquery(rel_file):
-                        continue
-
-                    new_entry = Entry()
-                    new_entry.name = rel_file
-                    entries[rel_file] = new_entry
-
-            new_entries = list(entries.values())
-        elif menu_type == MenuType.Dmenu:
-            desktop_session = os.getenv('DESKTOP_SESSION')
-
-            if not self.current_state.cache.get('d_entries'):
-                self.current_state.cache['d_entries'] = {}
-            
-            if not self.current_state.cache.get('icons'):
-                self.current_state.cache['icons'] = {}
-
-            for rel_entry_filename in os.listdir('/usr/share/applications'):
-                try:
-                    entry_filename = os.path.join('/usr/share/applications', rel_entry_filename)
-                    cached_desktop_entry = self.current_state.cache['d_entries'].get(rel_entry_filename)
-                    
-                    if cached_desktop_entry is None:
-                        desktop_entry = DesktopEntry.DesktopEntry(entry_filename)
-                    else:
-                        desktop_entry = cached_desktop_entry
-                    
-                    do_not_show_in = desktop_entry.getNotShowIn()
-                    only_show_in = desktop_entry.getOnlyShowIn()
-
-                    if not (not desktop_entry.getHidden() and
-                            not desktop_entry.getNoDisplay() and\
-                            (not do_not_show_in or desktop_session not in do_not_show_in) and \
-                            (not only_show_in or desktop_session in only_show_in)): 
-                        continue
-
-                    if cached_desktop_entry is None:
-                        self.current_state.cache['d_entries'][rel_entry_filename] = desktop_entry
-                    
-                    entry_name = desktop_entry.getName() 
-                    
-                    if not self.contains_subquery(entry_name):
-                        # i've thought of a concise way that fits in the guard clause statement
-                        # but can't get it done there so i'll do this instead
-                        entry_keywords = desktop_entry.getKeywords()
-                    
-                        for keyword in entry_keywords:
-                            if not self.contains_subquery(keyword.lower()):
-                                continue
-                            break
-                        else:
-                            continue
-
-                    cached_desktop_icon = self.current_state.cache['icons'].get(rel_entry_filename)
-                    desktop_icon = None
-                    
-                    if cached_desktop_icon is None:
-                        abs_icon_path = IconTheme.getIconPath(desktop_entry.getIcon())
-
-                        if abs_icon_path is not None:
-                            _, ext = os.path.splitext(abs_icon_path)
-
-                            if ext == '.png':
-                                desktop_icon = cairo.ImageSurface.create_from_png(abs_icon_path) 
-                            elif ext == '.svg':
-                                desktop_icon = Rsvg.Handle.new_from_file(abs_icon_path)
-                            else:
-                                print(f"Unknown icon extension of {abs_icon_path}")
-
-                        if desktop_icon is not None:
-                            self.current_state.cache['icons'][rel_entry_filename] = desktop_icon
-                    else:
-                        desktop_icon = cached_desktop_icon
-
-
-                    new_entry = Entry()
-                    new_entry.name = entry_name
-                    new_entry.icon = desktop_icon
-                    new_entry.short_description = desktop_entry.getGenericName()
-                    new_entry.description = desktop_entry.getComment()
-                    new_entries.append(new_entry)
-                    
-                except (XdgExceptions.ParsingError, XdgExceptions.DuplicateGroupError, \
-                        XdgExceptions.NoGroupError, XdgExceptions.DuplicateKeyError, \
-                        XdgExceptions.NoKeyError):
-                    pass
-
-        self.current_state.entries = new_entries
-        self.current_state.entries.sort(key=lambda item: (len(item.name), item.name))
-        self.current_state.total_entries_len = len(self.current_state.entries)
-        self.current_state.entries_len = min(self.current_state.total_entries_len, self.current_state.view_size)
-        self.current_state.entry_index = min(max(self.current_state.total_entries_len - 1, 0), self.current_state.entry_index)
-        self.current_state.update_page() # i should prob use some sort of attr change/access function instead of this
-      
-        self._finish_search()
-        self.current_state.notified_of_change = self.current_state.last_query != \
-                self.current_state.query.input
-        self.current_state.last_query = self.current_state.query.input
-
     def on_key_press(self, _, event):
         if event.hardware_keycode == 9:
-            Gtk.main_quit()
+            self.current_state.exit()
             return True
        
         controlled = self.current_state.query.controlled(event)
         
-        if controlled and event.hardware_keycode in range(10, 13):
-            key = event.hardware_keycode - 10
+        if controlled and event.hardware_keycode in range(10, 12):
+            self.current_state.go_empty_state()
         elif event.hardware_keycode == 110:
             self.current_state.entry_index = 0 
             self.current_state.update_page()
         elif event.hardware_keycode == 115:
             self.current_state.entry_index = self.current_state.total_entries_len - 1
             self.current_state.update_page()
-        elif event.hardware_keycode in [111, 116] and self.current_state.entries_len > 0:
+        elif event.hardware_keycode in [111, 116] and self.current_state.entries_len > 0 \
+                and self.current_state.loaded:
             self.current_state.entry_index = (self.current_state.entry_index \
                     + (1 if event.hardware_keycode == 116 else -1)) % \
                     self.current_state.total_entries_len
             self.current_state.update_page()
-        elif event.hardware_keycode in [36, 104]:
-            pass
+        elif event.hardware_keycode in [36, 104] and not self.current_state.exiting:
+            if self.current_state.in_query_typing:
+                self.search()
+            elif self.current_state.entries:
+                self.current_state.execute()
         elif not self.current_state.searching and self.current_state.query.handle_event(event):
-            self.search_blocked = False
             self.current_state.in_query_typing = True
-            self.search_time_timer = 0.45
+            self.autostart_search_timer = 1e99
 
         return True
 
-    def contains_subquery(self, substring):
-        return self.current_state.abs_empty or self.current_state.query.input.lower() in substring.lower()
 
     def search(self):
         if self.current_state.searching:
             return
 
-        searching_thread = Thread(target=self._search)
+        self.current_state.abs_empty = not self.current_state.query.input
+        searching_thread = Thread(target=self.current_state.current_menu.search)
         # searching_thread.daemon = True
         searching_thread.run()
-
-    def _finish_search(self):
-        self.current_state.searching = False
-        self.current_state.searched = True
-        self.current_state.loaded = True
-        self.current_state.in_query_typing = False
