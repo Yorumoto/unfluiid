@@ -649,7 +649,7 @@ class Main(Looper):
         self.menus = [self.dmenu, self.shell_menu]
         self._mst = DeltaTween(target=0)
 
-        self.autostart_search_timer = 0.6
+        self.autostart_search_timer = 1
         self.menu_alpha_inited = False
 
         self.loop_init()
