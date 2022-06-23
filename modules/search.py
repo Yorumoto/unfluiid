@@ -36,11 +36,6 @@ LIST_NUMBER_FONT = Pango.FontDescription("Iosevka Term 14")
 DESKTOP_FONT_SMALL = Pango.FontDescription("Cantarell Regular 11")
 DESKTOP_FONT_MAIN = Pango.FontDescription("Cantarell Regular 22")
 
-class MenuType(Enum):
-    Unknown = -1
-    Shell = 0
-    Dmenu = 1
-
 class CurrentState:
     input_bar_height = 50
     layout = None
@@ -112,7 +107,7 @@ class CurrentState:
         self.in_query_typing = False
         self.notified_of_change = self.last_query != \
                 self.query.input
-        self.last_query = self.query.input
+        self.last_query = self.query.input if self.query.input else "emptyLOL"
 
     def exit(self):
         if self.exiting:
@@ -181,15 +176,16 @@ class EntryMenu:
     
     def __init__(self, current_state):
         self.current_state = current_state
-        
-        self.ready_to_scroll = True
 
+        self.y = 0 # global y in rendering
         self.abs_y = None
         self.static_abs_y = None
         self.first_entry = None
 
+        self.global_alpha = 1
         self.test = 0
 
+        self._et = 0
         self._sia = DeltaTween(target=0)
         self._rtt = 0 # results transparency timer
         
@@ -254,8 +250,8 @@ class EntryMenu:
             if animatable.leaving and animatable._at <= 0:
                 del self.entries[entry]
  
-        self.ready_to_scroll = (not self.first_entry.leaving and self.first_entry._at > 0.8) if \
-                self.first_entry is not None else True
+        # self.ready_to_scroll = (not self.first_entry.leaving and self.first_entry._at > 0.8) if \
+                # self.first_entry is not None else True
 
 
         # self.entries = new_entries
@@ -269,19 +265,22 @@ class EntryMenu:
 
     def input_bar_draw(self, ctx, offset):
         ctx.save()
-        _at = self.current_state.appearance_timer
+        _at = pytweening.easeInOutQuad(self.current_state.appearance_timer)
+        _ga = pytweening.easeInOutQuad(self.global_alpha)
 
-        ctx.translate((1 - _at) * -400, -offset)
+        ctx.translate((1 - _at) * -220, -offset)
 
-        ctx.set_source_rgba(*self.background, _at)
+        ctx.set_source_rgba(*self.background, _at * _ga)
         
         common.context.rounded_shadow(ctx, 0, -self.current_state.input_bar_height * 0.5, self.current_state.width, self.current_state.input_bar_height, 
-                20, width_offset=15, height_offset=15, color=(0.1, 0.1, 0.1), global_alpha=_at)
+                20, width_offset=15, height_offset=15, color=(0.1, 0.1, 0.1), global_alpha=_at*_ga)
 
         common.context.rounded_rectangle(ctx, 0, -self.current_state.input_bar_height * 0.5, self.current_state.width, self.current_state.input_bar_height, 20)
         ctx.fill()
         
-        ctx.set_source_rgba(1, 1, 1, _at)
+        _tcdiff = 1 - (self._et * 0.85) # text color diff
+
+        ctx.set_source_rgba(1, _tcdiff, _tcdiff, _at * _ga)
 
         self.current_state.layout.set_font_description(INPUT_BAR_FONT)
 
@@ -296,14 +295,12 @@ class EntryMenu:
 
         ctx.save()
 
-
-        ctx.set_source_rgba(1, 1, 1, _at)
         ctx.translate(-27, 0)
         common.context.text(ctx, self.current_state.layout, text=self.symbol)
         ctx.fill()
         ctx.restore()
 
-        ctx.set_source_rgba(1, 1, 1, (0.35 + (self.current_state.cursor_transparency * 0.75)) * _at)
+        ctx.set_source_rgba(1, 1, 1, (0.35 + (self.current_state.cursor_transparency * 0.75)) * _at * _ga)
         ctx.set_line_width(3)
         ctx.translate(5 - 1.5, 0)
         ctx.move_to(text_bounds.width, 5)
@@ -317,9 +314,50 @@ class EntryMenu:
 START_CIRCLE = -90 * (pi / 180)
 DOUBLE_PI = pi * 2
 
-class DMenu(EntryMenu):
-    menu_type = MenuType.Dmenu
+class ShellMenu(EntryMenu):
+    symbol = ">"
 
+    def __init__(self, current_state):
+        super().__init__(current_state)
+        self.has_errored = False
+        self._et = 0
+        self.command = []
+
+    def update(self, dt):
+        if self.has_errored:
+            self._et = min(self._et + dt * 5, 1)
+            if self.current_state.in_query_typing:
+                self.has_errored = False
+        else:
+            self._et = max(self._et + dt * -5, 0)
+
+    def draw(self, ctx):
+        self.input_bar_draw(ctx, 30)
+
+    def execute(self):
+        if not self.command:
+            return
+
+        subprocess.Popen(self.command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, 
+                stderr=subprocess.DEVNULL, cwd=os.path.expanduser('~'))
+
+    def search(self):
+        if not self.current_state.query.input.strip():
+            return
+
+        try:
+            command = shlex.split(self.current_state.query.input)
+            tool = command[0]
+
+            if not shutil.which(tool):
+                raise ValueError # can't be specific in errors here in this function!
+           
+            self.command = command
+            self.current_state.execute()
+        except ValueError:
+            self.has_errored = True
+
+class DMenu(EntryMenu):
     def __init__(self, current_state):
         super().__init__(current_state)
 
@@ -339,8 +377,8 @@ class DMenu(EntryMenu):
         height = (self._sia.current() * self.entry_height) + 15
         static_height = (self.current_state.entries_len * self.entry_height) + 15
 
-        _rtt = pytweening.easeInOutQuad(self._rtt) * self.current_state.appearance_timer
-
+        _rtt = pytweening.easeInOutQuad(self._rtt * self.current_state.appearance_timer * self.global_alpha)
+        
         ctx.set_source_rgba(0.2,0.2,0.2, _rtt)
 
         self.abs_y = -height * 0.5
@@ -391,18 +429,18 @@ class DMenu(EntryMenu):
                 self._normal_colors[2] + (self._diff_colors[2] * _st),
             )
 
-            ctx.set_source_rgba(*context_color, _at)
+            ctx.set_source_rgba(*context_color, _rtt * _at)
 
             if _st > 0.5:
                 common.context.rounded_shadow(ctx, 0, 0, self.current_state.width-20, self.entry_height-5, 15, 
                         width_offset=15, height_offset=15, 
-                        color=self._selected_colors, global_alpha=_at*_st)
+                        color=self._selected_colors, global_alpha=_at*_st*_rtt)
 
             common.context.rounded_rectangle(ctx, 0, 0, self.current_state.width-20, self.entry_height-5, 15)
 
             ctx.fill()
             
-            ctx.set_source_rgba(0, 0, 0, _at)
+            ctx.set_source_rgba(0, 0, 0, _at * _rtt)
             
             self.current_state.layout.set_font_description(DESKTOP_FONT_MAIN)
 
@@ -428,7 +466,7 @@ class DMenu(EntryMenu):
                     )
 
                     ctx.set_source_surface(entry.icon.icon, -(entry.icon.width * 0.5), -(entry.icon.height * 0.5))
-                    ctx.paint_with_alpha(_at)
+                    ctx.paint_with_alpha(_at * _rtt)
 
                 ctx.restore()
 
@@ -461,15 +499,14 @@ class DMenu(EntryMenu):
     def execute(self):
         try:
             current_entry = self.current_state.entries[self.current_state.selected_entry_index]
-            print(current_entry.name, current_entry.execute, self.current_state.entry_index)
+
             command = shlex.split(current_entry.execute)
 
             if current_entry.run_via_terminal:
-                command = ['nohup', 'i3-sensible-terminal', '-e'] + command
-            else:
-                command = ['nohup'] + command
-
-            subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                command = ['i3-sensible-terminal', '-e'] + command
+            
+            subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, 
+                    stderr=subprocess.DEVNULL, cwd=os.path.expanduser('~'))
         except IndexError:
             pass # a chance
 
@@ -607,17 +644,21 @@ class Main(Looper):
         self.window.connect('key_press_event', self.on_key_press)
         self.window.grab(no_pointer=True)
      
-        self.current_state.current_menu = self.shell_menu
+        self.current_state.current_menu = self.dmenu
 
-        self.menus = [self.dmenu, None]
-        
-        self.autostart_search_timer = 1
+        self.menus = [self.dmenu, self.shell_menu]
+        self._mst = DeltaTween(target=0)
+
+        self.autostart_search_timer = 0.6
+        self.menu_alpha_inited = False
+
         self.loop_init()
 
     def update(self, dt):
         if self.autostart_search_timer <= 0:
             self.search()
             self.autostart_search_timer = 1e11
+            self.current_state.in_query_typing = False
         else:
             self.autostart_search_timer -= dt
 
@@ -643,8 +684,19 @@ class Main(Looper):
             self.current_state._at = min(self.current_state._at + dt * 4, 1)
 
         self.current_state.appearance_timer = pytweening.easeInOutQuad(self.current_state._at)
-        
-        self.dmenu.update(dt)
+
+        for i, menu in enumerate(self.menus):
+            if not self.menu_alpha_inited:
+                menu.global_alpha = 1 if menu is self.current_state.current_menu else 0
+            else:
+                menu.global_alpha = max(min(menu.global_alpha + dt * \
+                        (3 if menu is self.current_state.current_menu else -3) , 1), 0)
+
+        self.menu_alpha_inited = True
+
+        self._mst.update(dt * 3)
+        self.current_state.current_menu.update(dt)
+
         self.main_animator.draw()
 
     def draw(self, ctx, width, height):
@@ -654,7 +706,17 @@ class Main(Looper):
 
         ctx.fill()
         ctx.translate((width * 0.5) - (self.current_state.width * 0.5), height * 0.5)
-        self.dmenu.draw(ctx)
+
+        _mst_current = self._mst.current()
+
+        for i, menu in enumerate(self.menus):
+            if menu.global_alpha <= 0:
+                continue
+
+            ctx.save()
+            ctx.translate(0, (i * 500) - (_mst_current * 500))
+            menu.draw(ctx)
+            ctx.restore()
 
     def on_key_press(self, _, event):
         if event.hardware_keycode == 9:
@@ -663,20 +725,33 @@ class Main(Looper):
        
         controlled = self.current_state.query.controlled(event)
         
-        if controlled and event.hardware_keycode in range(10, 12):
-            self.current_state.go_empty_state()
+        if controlled and event.hardware_keycode in range(10, 12) and \
+                not self.current_state.exiting:
+            # 2 only lol
+            if event.hardware_keycode == 10:
+                self.current_state.current_menu = self.dmenu
+            else:
+                self.current_state.current_menu = self.shell_menu
+
+            self._mst.change_target(\
+                    self.menus.index(self.current_state.current_menu) \
+                    )
         elif event.hardware_keycode == 110:
             self.current_state.entry_index = 0 
             self.current_state.update_page()
+            self.current_state.in_query_typing = True
+            self.current_state.last_query = ""
         elif event.hardware_keycode == 115:
             self.current_state.entry_index = self.current_state.total_entries_len - 1
             self.current_state.update_page()
+            self.current_state.in_query_typing = False
         elif event.hardware_keycode in [111, 116] and self.current_state.entries_len > 0 \
                 and self.current_state.loaded:
             self.current_state.entry_index = (self.current_state.entry_index \
                     + (1 if event.hardware_keycode == 116 else -1)) % \
                     self.current_state.total_entries_len
             self.current_state.update_page()
+            self.current_state.in_query_typing = False
         elif event.hardware_keycode in [36, 104] and not self.current_state.exiting:
             if self.current_state.in_query_typing:
                 self.search()
@@ -697,3 +772,4 @@ class Main(Looper):
         searching_thread = Thread(target=self.current_state.current_menu.search)
         # searching_thread.daemon = True
         searching_thread.run()
+        self.current_state.in_query_typing = False
