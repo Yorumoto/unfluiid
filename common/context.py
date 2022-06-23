@@ -49,7 +49,7 @@ def rounded_rectangle(context, x, y, width, height, radius=25):
     context.arc(x + radius, y + radius, radius, 180 * _DEGREES, 270 * _DEGREES)
     context.close_path()
 
-def rounded_shadow(context, x, y, width, height, radius=25, depth=25, depth_by=20, depth_alpha=0.125, global_alpha=1, width_offset=20, height_offset=20, color=None): 
+def rounded_shadow(context, x, y, width, height, radius=25, depth=10, depth_by=20, depth_alpha=0.125, global_alpha=1, width_offset=20, height_offset=20, color=None): 
     # lotta parameters for one shadow
     # i'm gonna be overwhelmed :dizzy_face:
 

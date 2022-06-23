@@ -29,6 +29,7 @@ import time
 import os
 
 INPUT_BAR_FONT = Pango.FontDescription("Iosevka Term 25")
+LIST_NUMBER_FONT = Pango.FontDescription("Iosevka Term 14")
 
 DESKTOP_FONT_SMALL = Pango.FontDescription("Cantarell Regular 11")
 DESKTOP_FONT_MAIN = Pango.FontDescription("Cantarell Regular 22")
@@ -151,7 +152,7 @@ class EntryMenu:
             page_entries = self.current_state.entries[start:end]
 
             for entry, animatable in self.entries.items():
-                animatable._del_t = animatable.index * 0.025 if animatable._at >= 1 else 0
+                # animatable._del_t = animatable.index * 0.025 if animatable._at >= 1 else 0
                 animatable.start_y = self.static_abs_y
                 animatable.leaving = True
 
@@ -160,7 +161,8 @@ class EntryMenu:
             for index, entry in enumerate(page_entries):
                 new_animatable = AnimatableEntry()
                 new_animatable.index = index
-                new_animatable._del_t = index * 0.0175
+                # i kinda don't like the adding each item slowly one by one, it looks kinda slow
+                # new_animatable._del_t = index * 0.0175
 
                 if self.first_entry is None:
                     self.first_entry = new_animatable
@@ -173,9 +175,11 @@ class EntryMenu:
         self._sia.update(dt * 4)
         self._rtt = max(min(self._rtt + (dt * (16 if self.current_state.entries_len else -16)), 1), 0)
         
-        new_entries = {}
+        # new_entries = {}
         
-        for entry, animatable in self.entries.items():
+        animatable_entry_items = list(self.entries.items())
+
+        for (entry, animatable) in animatable_entry_items:
             animatable.selected = animatable.index == self.current_state.entry_index - self.page_offset
 
             if animatable._del_t > 0:
@@ -185,14 +189,14 @@ class EntryMenu:
 
             animatable._st = max(min(animatable._st + dt * (-9 if (animatable.selected and not animatable.leaving) else 9), 1), 0)
             
-            if not animatable.leaving or animatable._at > 0:
-                new_entries[entry] = animatable
+            if animatable.leaving and animatable._at <= 0:
+                del self.entries[entry]
  
         self.ready_to_scroll = (not self.first_entry.leaving and self.first_entry._at > 0.8) if \
                 self.first_entry is not None else True
 
 
-        self.entries = new_entries
+        # self.entries = new_entries
         
 
         self.last_entries_len = entries_len
@@ -206,6 +210,10 @@ class EntryMenu:
         ctx.translate(0, -offset)
 
         ctx.set_source_rgba(*self.background, 1)
+        
+        common.context.rounded_shadow(ctx, 0, -self.current_state.input_bar_height * 0.5, self.current_state.width, self.current_state.input_bar_height, 
+                20, width_offset=15, height_offset=15, color=(0.1, 0.1, 0.1))
+
         common.context.rounded_rectangle(ctx, 0, -self.current_state.input_bar_height * 0.5, self.current_state.width, self.current_state.input_bar_height, 20)
         ctx.fill()
         
@@ -312,13 +320,32 @@ class DMenu(EntryMenu):
         height = (self._sia.current() * self.entry_height) + 15
         static_height = (self.current_state.entries_len * self.entry_height) + 15
 
-        ctx.set_source_rgba(0.2,0.2,0.2, pytweening.easeInOutQuad(self._rtt))
+        _rtt = pytweening.easeInOutQuad(self._rtt)
+
+        ctx.set_source_rgba(0.2,0.2,0.2, _rtt)
 
         self.abs_y = -height * 0.5
         self.static_abs_y = -static_height * 0.5
 
-        common.context.rounded_rectangle(ctx, 0, self.abs_y, self.current_state.width, height, min(max(height, 40), 20))
+        radius= min(max(height, 40), 20)
+
+        common.context.rounded_shadow(ctx, 0, self.abs_y, self.current_state.width, height + 50, radius, 
+                global_alpha=_rtt, color=(0.125, 0.125, 0.125))
+
+        common.context.rounded_rectangle(ctx, 0, self.abs_y, self.current_state.width, height + 50, radius)
         ctx.fill()
+
+        ctx.save()
+        ctx.translate(15, self.abs_y + height)
+        ctx.set_source_rgba(1, 1, 1, _rtt)
+        self.current_state.layout.set_font_description(INPUT_BAR_FONT)
+        
+        common.context.text(ctx, self.current_state.layout, 
+                f"{self.current_state.entry_index+1}/{self.current_state.total_entries_len}")
+
+        ctx.fill()
+        ctx.restore()
+
         
         for entry, animatable in self.entries.items():
             _at = pytweening.easeInOutQuint(animatable._at)
@@ -336,7 +363,12 @@ class DMenu(EntryMenu):
 
             ctx.set_source_rgba(*context_color, _at)
 
-            common.context.rounded_rectangle(ctx, 0, 0, self.current_state.width-20, self.entry_height - 5, 15)
+            if _st > 0.5:
+                common.context.rounded_shadow(ctx, 0, 0, self.current_state.width-20, self.entry_height-5, 15, 
+                        width_offset=15, height_offset=15, 
+                        color=self._selected_colors, global_alpha=_at*_st)
+
+            common.context.rounded_rectangle(ctx, 0, 0, self.current_state.width-20, self.entry_height-5, 15)
 
             ctx.fill()
             
@@ -511,10 +543,19 @@ class Main(Looper):
                     if cached_desktop_entry is None:
                         self.current_state.cache['d_entries'][rel_entry_filename] = desktop_entry
                     
-                    entry_name = desktop_entry.getName()
+                    entry_name = desktop_entry.getName() 
                     
                     if not self.contains_subquery(entry_name):
-                        continue
+                        # i've thought of a concise way that fits in the guard clause statement
+                        # but can't get it done there so i'll do this instead
+                        entry_keywords = desktop_entry.getKeywords()
+                    
+                        for keyword in entry_keywords:
+                            if not self.contains_subquery(keyword.lower()):
+                                continue
+                            break
+                        else:
+                            continue
 
                     cached_desktop_icon = self.current_state.cache['icons'].get(rel_entry_filename)
                     desktop_icon = None
@@ -571,25 +612,23 @@ class Main(Looper):
         
         if controlled and event.hardware_keycode in range(10, 13):
             key = event.hardware_keycode - 10
-        elif event.hardware_keycode == 110 and self.current_menu.ready_to_scroll:
+        elif event.hardware_keycode == 110:
             self.current_state.entry_index = 0 
             self.current_state.update_page()
-        elif event.hardware_keycode == 115 and self.current_menu.ready_to_scroll:
+        elif event.hardware_keycode == 115:
             self.current_state.entry_index = self.current_state.total_entries_len - 1
             self.current_state.update_page()
-        elif event.hardware_keycode in [111, 116] and self.current_state.entries_len > 0\
-                and self.current_menu.ready_to_scroll:
+        elif event.hardware_keycode in [111, 116] and self.current_state.entries_len > 0:
             self.current_state.entry_index = (self.current_state.entry_index \
                     + (1 if event.hardware_keycode == 116 else -1)) % \
                     self.current_state.total_entries_len
             self.current_state.update_page()
-        elif event.hardware_keycode == 36:
+        elif event.hardware_keycode in [36, 104]:
             pass
-        elif not self.current_state.searching:
-            self.current_state.query.handle_event(event)
+        elif not self.current_state.searching and self.current_state.query.handle_event(event):
             self.search_blocked = False
             self.current_state.in_query_typing = True
-            self.search_time_timer = 0.5
+            self.search_time_timer = 0.45
 
         return True
 
@@ -609,10 +648,3 @@ class Main(Looper):
         self.current_state.searched = True
         self.current_state.loaded = True
         self.current_state.in_query_typing = False
-
-    def alert_for_direct_execution(self):
-        Notify.Notification.new(
-                "unfluiid", 
-                '''To execute with the query, press Ctrl+Enter.
-                '''
-                ).show()
