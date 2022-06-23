@@ -378,7 +378,8 @@ class DMenu(EntryMenu):
         static_height = (self.current_state.entries_len * self.entry_height) + 15
 
         _rtt = pytweening.easeInOutQuad(self._rtt * self.current_state.appearance_timer * self.global_alpha)
-        
+        _ga = pytweening.easeInOutQuad(self.global_alpha)
+
         ctx.set_source_rgba(0.2,0.2,0.2, _rtt)
 
         self.abs_y = -height * 0.5
@@ -413,7 +414,6 @@ class DMenu(EntryMenu):
         ctx.fill()
         ctx.restore()
 
-        
         for entry, animatable in self.entries.items():
             _at = pytweening.easeInOutQuint(animatable._at)
             _st = 1 - animatable._st
@@ -429,18 +429,18 @@ class DMenu(EntryMenu):
                 self._normal_colors[2] + (self._diff_colors[2] * _st),
             )
 
-            ctx.set_source_rgba(*context_color, _rtt * _at)
+            ctx.set_source_rgba(*context_color, _at * _ga)
 
             if _st > 0.5:
                 common.context.rounded_shadow(ctx, 0, 0, self.current_state.width-20, self.entry_height-5, 15, 
                         width_offset=15, height_offset=15, 
-                        color=self._selected_colors, global_alpha=_at*_st*_rtt)
+                        color=self._selected_colors, global_alpha=_at*_st*_ga)
 
             common.context.rounded_rectangle(ctx, 0, 0, self.current_state.width-20, self.entry_height-5, 15)
 
             ctx.fill()
             
-            ctx.set_source_rgba(0, 0, 0, _at * _rtt)
+            ctx.set_source_rgba(0, 0, 0, _at * _ga)
             
             self.current_state.layout.set_font_description(DESKTOP_FONT_MAIN)
 
@@ -466,7 +466,7 @@ class DMenu(EntryMenu):
                     )
 
                     ctx.set_source_surface(entry.icon.icon, -(entry.icon.width * 0.5), -(entry.icon.height * 0.5))
-                    ctx.paint_with_alpha(_at * _rtt)
+                    ctx.paint_with_alpha(_at * _ga)
 
                 ctx.restore()
 
