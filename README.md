@@ -3,10 +3,9 @@
 
 ![insert image here]()
 
-A rice where I reinvented the wheel (polybar, bar, eww, rofi, dunst, and maybe awesome) just for cool transitions. For the exception of the tray which is made in Polybar, I don't know how someone can integrate an entire tray to their UI.
+A rice where I reinvented the wheel (polybar, bar, eww, rofi, dunst, and maybe awesome) just for cool transitions. 
 
-Some of bad programming has been made (my first rice not to mostly depend on configuration scripting)~~, so if you are a coding nazi, spot 'em all!~~
-
+The code is mid messy, so forking it will be a pain in the ass, so it's a learn-as-you-go project. (It's better that I'll probably drop an API to make rices almost in Python)
 
 ## Installation
 You'll need an i3wm/sway desktop environment, because it uses the i3ipc dependency for displaying the window titles and workspaces.

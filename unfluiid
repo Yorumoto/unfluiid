@@ -16,13 +16,13 @@ def main():
         import modules.bar
         modules.bar.Main()
     elif mode == 'dashboard':
-        pass
+        import modules.dashboard
+        modules.dashboard.Main()
     elif mode == 'search':
         import modules.search
         modules.search.Main()
     # elif mode == "notification":
     #    modules.notification.Main()
-    # pango lol
     elif mode == 'powermenu':
         import modules.powermenu
         modules.powermenu.Main()
