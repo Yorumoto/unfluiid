@@ -8,7 +8,7 @@ import shutil
 import shlex
 import subprocess
 
-from math import pi
+from math import gamma, pi
 from xdg import Exceptions as XdgExceptions
 from xdg import DesktopEntry, IconTheme
 
@@ -179,7 +179,6 @@ class EntryMenu:
 
         self.y = 0 # global y in rendering
         self.abs_y = None
-        self.static_abs_y = None
         self.first_entry = None
 
         self.global_alpha = 1
@@ -195,22 +194,29 @@ class EntryMenu:
         self.page_offset = 0
         self.last_page = None
         self.last_entries_len = None
+    
+
+    def static_height(self, len=1):
+        return (len * self.entry_height) + 15
  
     def update(self, dt):
         page = self.current_state.entry_page
         entries_len = self.current_state.entries_len
 
-        if self.static_abs_y and self.current_state.notified_of_change \
-                or (entries_len != self.last_entries_len or page != self.last_page):
+        if self.current_state.notified_of_change or (entries_len != self.last_entries_len or page != self.last_page):
             start, end = self.current_state.get_page_offset()
             self.page_offset = start
 
             page_entries = self.current_state.entries[start:end]
 
+            static_abs_y = self.static_height(len=self.last_entries_len or 0) * -0.5
+
             for entry, animatable in self.entries.items():
                 # animatable._del_t = animatable.index * 0.025 if animatable._at >= 1 else 0
-                animatable.start_y = self.static_abs_y
+                animatable.start_y = static_abs_y
                 animatable.leaving = True
+            
+            static_abs_y = self.static_height(len=entries_len) * -0.5
 
             if self.current_state.loaded:
                 self.first_entry = None
@@ -218,6 +224,7 @@ class EntryMenu:
                 for index, entry in enumerate(page_entries):
                     new_animatable = AnimatableEntry()
                     new_animatable.index = index
+                    new_animatable.start_y = static_abs_y
                     # i kinda don't like the adding each item slowly one by one, it looks kinda slow
                     # new_animatable._del_t = index * 0.0175
 
@@ -375,20 +382,18 @@ class DMenu(EntryMenu):
 
     def draw(self, ctx):
         height = (self._sia.current() * self.entry_height) + 15
-        static_height = (self.current_state.entries_len * self.entry_height) + 15
 
-        _rtt = pytweening.easeInOutQuad(self._rtt * self.current_state.appearance_timer * self.global_alpha)
+        _rtt = pytweening.easeInOutQuad(self._rtt)
         _ga = pytweening.easeInOutQuad(self.global_alpha)
 
-        ctx.set_source_rgba(0.2,0.2,0.2, _rtt)
+        ctx.set_source_rgba(0.2,0.2,0.2, _rtt * _ga)
 
         self.abs_y = -height * 0.5
-        self.static_abs_y = -static_height * 0.5
 
         radius= min(max(height, 40), 20)
 
         common.context.rounded_shadow(ctx, 0, self.abs_y, self.current_state.width, height + 50, radius, 
-                global_alpha=_rtt, color=(0.125, 0.125, 0.125))
+                global_alpha=_rtt * _ga, color=(0.125, 0.125, 0.125))
 
         common.context.rounded_rectangle(ctx, 0, self.abs_y, self.current_state.width, height + 50, radius)
         ctx.fill()
@@ -420,7 +425,7 @@ class DMenu(EntryMenu):
             # _sst = pytweening.easeInOutQuad(_st)
 
             ctx.save()
-            ctx.translate(10 - (300 * (1 - _at)), 10 + (animatable.start_y or self.static_abs_y) + \
+            ctx.translate(10 - (300 * (1 - _at)), 10 + animatable.start_y + \
                     (self.entry_height * animatable.index))
             
             context_color = (
@@ -720,6 +725,7 @@ class Main(Looper):
 
     def on_key_press(self, _, event):
         if event.hardware_keycode == 9:
+            self.autostart_search_timer = 1e9
             self.current_state.exit()
             return True
        
