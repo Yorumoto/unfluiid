@@ -2,6 +2,12 @@ from modules.dashboard_modules.util import Widget
 import common.context
 
 import psutil
+import getpass
+import platform
+
+from math import pi
+
+_DPI = pi * 2
 
 import time
 from time import perf_counter as get_time
@@ -17,6 +23,10 @@ TIME_FONT.set_weight(Pango.Weight.BOLD)
 SMALL_FONT = Pango.FontDescription('Cantarell 18')
 SMALL_BOLD_FONT = Pango.FontDescription('Cantarell 18')
 SMALL_BOLD_FONT.set_weight(Pango.Weight.BOLD)
+
+CIRCLE_FONT = Pango.FontDescription('Cantarell 14')
+CIRCLE_BOLD_FONT = Pango.FontDescription('Cantarell 28')
+CIRCLE_BOLD_FONT.set_weight(Pango.Weight.BOLD)
 
 T_NAMES = ['%H', '%M', '%S']
 
@@ -44,6 +54,7 @@ class SysInfoWidget(Widget):
         self.at = [[] for _ in range(3)]
         self.atrf = [None for _ in range(3)]
 
+        self.full_username = f"<b>{getpass.getuser()}</b>@{platform.uname().node}"
         self.update_status()
 
         self.update_time_timer = 0
@@ -51,7 +62,8 @@ class SysInfoWidget(Widget):
 
     def update_status(self):
         self.processes_running = len(list(psutil.process_iter()))
-        self.percentage = psutil.virtual_memory().percent
+        self.memory_percentage = psutil.virtual_memory().percent
+        self.disk_percentage = psutil.disk_usage('/').percent
 
     def update_timer_ui_layout(self):
         if self.lt is not None:
@@ -106,17 +118,50 @@ class SysInfoWidget(Widget):
 
             self.at[i] = new_ats
   
-    def circle(self, ctx, layout, header, percentage, x=0, y=0, radius=50):
+    _circle_main_color = (1, 150/255, 124/255)
+
+    def circle(self, ctx, layout, header, percentage, x=0, y=0, radius=60):
         ctx.save()
-        ctx.set_source_rgb(0.25, 0.25, 0.25)
-        ctx.set_line_width(10)
+        
+        ctx.set_line_width(13)
+        ctx.set_source_rgba(0.2, 0.2, 0.2, self.alpha * 0.25)
         ctx.set_line_cap(cairo.LineCap.ROUND)
+
         common.context.circle(ctx, x, y, radius)
         ctx.stroke()
+
+        ctx.set_line_width(11)
+        ctx.set_source_rgba(0.2, 0.2, 0.2, self.alpha)
+        common.context.circle(ctx, x, y, radius)
+        ctx.stroke()
+        
+        ctx.set_line_width(10)
+        ctx.set_source_rgba(*self._circle_main_color, self.alpha)
+
+        p_div = percentage / 100
+
+        ctx.arc(x, y, radius, -0.25 * _DPI, _DPI * (p_div - 0.25))
+        ctx.stroke()
+
+        ctx.set_source_rgba(0, 0, 0, self.alpha)
+        layout.set_font_description(CIRCLE_BOLD_FONT)
+
+        p_text = f"{int(percentage)}%"
+
+        ctx.move_to(x - common.context.text_bounds(layout, p_text).width * 0.5, y - 30)
+        common.context.text(ctx, layout, p_text)
+        
+        layout.set_font_description(CIRCLE_FONT)
+        ctx.move_to(x - common.context.text_bounds(layout, header).width * 0.5, y + 5)
+        common.context.text(ctx, layout, header)
+
         ctx.restore()
 
     def draw_widget(self, ctx, layout):
         ctx.set_source_rgb(0, 0, 0)
+
+        self.circle(ctx, layout, "disk", self.disk_percentage, 65, 170)
+        self.circle(ctx, layout, "memory", self.memory_percentage, self.width-84, 170)
 
         layout.set_font_description(TIME_FONT)
 
@@ -132,6 +177,7 @@ class SysInfoWidget(Widget):
                 ctx.translate((45 + (i * 90)) - w, ((1 - at._tat) * 100) + (at._tet * -100) - 10)
                 common.context.text(ctx, layout, at.dsp)
                 ctx.fill()
+
                 ctx.restore()
 
         ctx.restore()
@@ -144,6 +190,13 @@ class SysInfoWidget(Widget):
         ctx.move_to(120, 0)
         layout.set_font_description(SMALL_BOLD_FONT)
         common.context.text(ctx, layout, str(self.processes_running))
+        ctx.fill()
         ctx.restore()
 
-        self.circle(ctx, layout, "test", 50, 65, 170)
+        ctx.save()
+        layout.set_font_description(SMALL_FONT)
+        ctx.move_to((self.width * 0.5) - (\
+                    common.context.text_bounds(layout, self.full_username, markup=True).width * 0.5), self.height - 50)
+        common.context.text(ctx, layout, self.full_username, markup=True)
+        ctx.restore()
+

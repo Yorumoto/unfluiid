@@ -1,8 +1,8 @@
 from time import perf_counter as get_time
 import common.context
 
-def mouse_hovering(window, x, y, width, height):
-    device_position = window.pointer_device.get_position()
+def mouse_hovering(device_position, x, y, width, height):
+    # device_position = window.pointer_device.get_position()
 
     return device_position.x > x and device_position.x < x + width and \
             device_position.y > y and device_position.y < y + height
@@ -22,23 +22,39 @@ class Widget:
         self.height = self.start_height
         self.padding = 10
 
+        # TODO: integrate custom widgets with these
+        self.draw_x = self.x
+        self.draw_y = self.y
+        self.draw_inner_x = self.x + self.padding
+        self.draw_inner_y = self.y + self.padding
+        self.draw_width = self.width
+        self.draw_height = self.height
+
+        self.wobble_timer = 0
         self.alpha = 1
         self.press_time = 0
+
+        self.colliding = False
         self.holding = False
 
-    def on_press(self, press_time, colliding):
-        self.holding = colliding
+    def on_press(self, press_time):
+        self.holding = self.colliding
 
     def on_release(self):
         self.holding = False
 
-    def on_click(self, press_release_time, colliding):
+    def on_click(self, press_release_time):
         pass
 
     def update_widget(self, dt):
         pass
 
-    def update(self, dt):
+    def update(self, dt, global_alpha):
+        self.alpha = global_alpha
+
+        if self.holding:
+            self.holding = self.colliding
+
         self.update_widget(dt)
 
     def draw_widget(self, ctx):

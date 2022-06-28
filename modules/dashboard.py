@@ -8,6 +8,7 @@ from modules.dashboard_modules.util import mouse_hovering
 
 # messy importing shit
 from modules.dashboard_modules.sysinfo import SysInfoWidget
+from modules.dashboard_modules.calendar import CalendarWidget
 
 import common.context
 import pytweening
@@ -35,8 +36,9 @@ class Main(Looper):
         self._ft = 0
         self.full_screen_timer = 0
 
-        self.widgets = [SysInfoWidget()]
-        
+        self.widgets = [SysInfoWidget(), ]
+        CalendarWidget()
+
         self.x = 0
         self.y = 0
         self.width = 1000
@@ -48,6 +50,8 @@ class Main(Looper):
         self.mouse_pressed_time = 0 # mouse pressed time
         self.mouse_pressing = False # mouse pressed
 
+        self.about_to_zoom_timer = 0 # 
+        self.zoomed_widget = None
         self.layout = None
 
         self.loop_init()
@@ -63,8 +67,7 @@ class Main(Looper):
             self.mouse_pressed_time = get_time()
 
             for widget in self.widgets:
-                widget.on_press(self.mouse_pressed_time, mouse_hovering(
-                    self.window, widget.x, widget.y, widget.width, widget.height))
+                widget.on_press(self.mouse_pressed_time)
                 
 
         return True
@@ -72,11 +75,11 @@ class Main(Looper):
     def on_release(self, _, event):
         if self.mouse_pressing:
             self.mouse_pressing = False
-            
+            delay = get_time() - self.mouse_pressed_time
+
             for widget in self.widgets:
                 widget.on_release()
-                widget.on_click(get_time() - self.mouse_pressed_time, mouse_hovering(
-                    self.window, widget.x, widget.y, widget.width, widget.height))
+                widget.on_click(delay)
 
         return True
 
@@ -108,8 +111,11 @@ class Main(Looper):
         self.main_animator.draw()
 
         # position widgets
+        device_position = self.window.pointer_device.get_position()
+
         for widget in self.widgets:
             widget.x = self.x + self.padding + widget.start_x
             widget.y = self.y + self.padding + widget.start_y
-            widget.update(dt)
+            widget.colliding = mouse_hovering(device_position, widget.x, widget.y, widget.width, widget.height)
+            widget.update(dt, self.global_alpha)
 

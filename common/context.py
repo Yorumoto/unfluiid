@@ -14,13 +14,7 @@ PANGO_REDUCE = Pango.SCALE
 
 # context vs ctx, :thinking:
 
-def text_bounds(layout, text="hello"):
-    layout.set_text(text, -1)
-    return layout.get_pixel_size()
-
-def text(context, layout, text="hello", markup=False):
-    context.save()
-
+def set_layout(layout, text, markup):
     if markup:
         layout.set_text("", -1)
         layout.set_markup(text, -1)
@@ -28,6 +22,13 @@ def text(context, layout, text="hello", markup=False):
         layout.set_markup("", -1)
         layout.set_text(text, -1)
 
+def text_bounds(layout, text="hello", markup=False):
+    set_layout(layout, text, markup)
+    return layout.get_pixel_size()
+
+def text(context, layout, text="hello", markup=False):
+    context.save()
+    set_layout(layout, text, markup)
     PangoCairo.update_layout(context, layout)
     # TODO: pls help, it lowers down a little bit when it comes to unicode
     # w, h = layout.get_size()
@@ -69,7 +70,7 @@ def rounded_shadow(context, x, y, width, height, radius=25, depth=10, depth_by=2
 
     context.restore()
 
-def circle(context, x, y, radius, start=0, end=1):
+def circle(context, x, y, radius):
     context.new_path()
-    context.arc(x, y, radius, _DPI * start, _DPI * end)
+    context.arc(x, y, radius, 0, _DPI)
     context.close_path()
