@@ -69,7 +69,7 @@ def rounded_shadow(context, x, y, width, height, radius=25, depth=10, depth_by=2
 
     context.restore()
 
-def circle(context, x, y, radius):
+def circle(context, x, y, radius, start=0, end=1):
     context.new_path()
-    context.arc(x, y, radius, 0, _DPI)
+    context.arc(x, y, radius, _DPI * start, _DPI * end)
     context.close_path()

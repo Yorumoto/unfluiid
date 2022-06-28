@@ -21,8 +21,7 @@ import pytweening
 import common.context
 
 import gi
-gi.require_version('Rsvg', '2.0')
-from gi.repository import Gtk, GLib, Pango, PangoCairo, Rsvg
+from gi.repository import Gtk, GLib, Pango, PangoCairo
 
 import cairo
 GLib.threads_init()
@@ -35,6 +34,7 @@ LIST_NUMBER_FONT = Pango.FontDescription("Iosevka Term 14")
 
 DESKTOP_FONT_SMALL = Pango.FontDescription("Cantarell Regular 11")
 DESKTOP_FONT_MAIN = Pango.FontDescription("Cantarell Regular 22")
+DESKTOP_FONT_MAIN.set_weight(Pango.Weight.BOLD)
 
 class CurrentState:
     input_bar_height = 50
@@ -400,7 +400,7 @@ class DMenu(EntryMenu):
 
         ctx.save()
         ctx.translate(15, self.abs_y + height)
-        ctx.set_source_rgba(1, 1, 1, _rtt)
+        ctx.set_source_rgba(1, 1, 1, _rtt * _ga)
         self.current_state.layout.set_font_description(INPUT_BAR_FONT)
        
         common.context.text(ctx, self.current_state.layout, 
@@ -478,7 +478,7 @@ class DMenu(EntryMenu):
             ctx.save()
 
             ctx.move_to(shift_x, 2)
-            common.context.text(ctx, self.current_state.layout, f"<b>{entry.name}</b>", markup=True)
+            common.context.text(ctx, self.current_state.layout, f"{entry.name}")
             ctx.fill()
 
             self.current_state.layout.set_font_description(DESKTOP_FONT_SMALL)
@@ -654,18 +654,18 @@ class Main(Looper):
         self.menus = [self.dmenu, self.shell_menu]
         self._mst = DeltaTween(target=0)
 
-        self.autostart_search_timer = 1
+        # self.autostart_search_timer = 1
         self.menu_alpha_inited = False
 
         self.loop_init()
 
     def update(self, dt):
-        if self.autostart_search_timer <= 0:
-            self.search()
-            self.autostart_search_timer = 1e11
-            self.current_state.in_query_typing = False
-        else:
-            self.autostart_search_timer -= dt
+        #if self.autostart_search_timer <= 0:
+        #    self.search()
+        #    self.autostart_search_timer = 1e11
+        #    self.current_state.in_query_typing = False
+        #else:
+        #    self.autostart_search_timer -= dt
 
         self._ct = (self._ct + dt * 4) % 2
        
@@ -707,7 +707,6 @@ class Main(Looper):
     def draw(self, ctx, width, height):
         if self.current_state.layout is None:
             self.current_state.layout = PangoCairo.create_layout(ctx)
-            self.current_state.layout.set_markup
 
         ctx.fill()
         ctx.translate((width * 0.5) - (self.current_state.width * 0.5), height * 0.5)
