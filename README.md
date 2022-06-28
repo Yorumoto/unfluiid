@@ -5,7 +5,7 @@
 
 A rice where I reinvented the wheel (polybar, bar, eww, rofi, dunst, and maybe awesome) just for cool transitions. 
 
-The code is mid messy, so forking it will be a pain in the ass, so it's a learn-as-you-go project. (It's better that I'll probably drop an API to make rices almost in Python)
+The code is mid messy, so forking it will be a pain in the ass, so it's rather a showcase than something for a template to begin with. (It's better that I'll probably drop an API to make rices almost in Python)
 
 ## Installation
 You'll need an i3wm/sway desktop environment, because it uses the i3ipc dependency for displaying the window titles and workspaces.
