@@ -11,6 +11,8 @@ _DPI = pi * 2
 
 import time
 from time import perf_counter as get_time
+from time import time as get_slow_time
+
 import pytweening
 
 from gi.repository import Pango
@@ -54,6 +56,7 @@ class SysInfoWidget(Widget):
         self.at = [[] for _ in range(3)]
         self.atrf = [None for _ in range(3)]
 
+        self.no_zoom = True
         self.full_username = f"<b>{getpass.getuser()}</b>@{platform.uname().node}"
         self.update_status()
 
@@ -89,7 +92,7 @@ class SysInfoWidget(Widget):
         self.lt = self.t.copy()
 
     def update_widget(self, dt):
-        if self.update_time_timer <= 0:
+        if self.update_time_timer <= 0: 
             for i, name in enumerate(T_NAMES):
                 self.t[i] = time.strftime(name)
             
@@ -97,6 +100,7 @@ class SysInfoWidget(Widget):
 
             ct = get_time()
             self.update_time_timer = ct - round(ct)
+
         else:
             self.update_time_timer -= dt
 
@@ -120,22 +124,22 @@ class SysInfoWidget(Widget):
   
     _circle_main_color = (1, 150/255, 124/255)
 
-    def circle(self, ctx, layout, header, percentage, x=0, y=0, radius=60):
+    def circle(self, ctx, layout, header, percentage, x=0, y=0, radius=60, line_width=10):
         ctx.save()
         
-        ctx.set_line_width(13)
+        ctx.set_line_width(line_width+3)
         ctx.set_source_rgba(0.2, 0.2, 0.2, self.alpha * 0.25)
         ctx.set_line_cap(cairo.LineCap.ROUND)
 
         common.context.circle(ctx, x, y, radius)
         ctx.stroke()
 
-        ctx.set_line_width(11)
+        ctx.set_line_width(line_width+2)
         ctx.set_source_rgba(0.2, 0.2, 0.2, self.alpha)
         common.context.circle(ctx, x, y, radius)
         ctx.stroke()
         
-        ctx.set_line_width(10)
+        ctx.set_line_width(line_width)
         ctx.set_source_rgba(*self._circle_main_color, self.alpha)
 
         p_div = percentage / 100
@@ -160,12 +164,17 @@ class SysInfoWidget(Widget):
     def draw_widget(self, ctx, layout):
         ctx.set_source_rgb(0, 0, 0)
 
-        self.circle(ctx, layout, "disk", self.disk_percentage, 65, 170)
-        self.circle(ctx, layout, "memory", self.memory_percentage, self.width-84, 170)
-
-        layout.set_font_description(TIME_FONT)
-
         ctx.save()
+
+        self.circle(ctx, layout, "disk", self.disk_percentage, 65, 170 )
+        self.circle(ctx, layout, "memory", self.memory_percentage, self.width-84, 170)
+        ctx.restore()
+        
+        layout.set_font_description(TIME_FONT)
+        
+        ctx.save()
+
+
         ctx.rectangle(0, 0, self.width, 60)
         ctx.clip()
 
@@ -174,7 +183,7 @@ class SysInfoWidget(Widget):
                 ctx.save()
                 w = common.context.text_bounds(layout, at.dsp).width * 0.5
 
-                ctx.translate((45 + (i * 90)) - w, ((1 - at._tat) * 100) + (at._tet * -100) - 10)
+                ctx.translate((self.zoom_timer * 100) + (45 + (i * 90)) - w, ((1 - at._tat) * 100) + (at._tet * -100) - 10)
                 common.context.text(ctx, layout, at.dsp)
                 ctx.fill()
 
@@ -182,10 +191,16 @@ class SysInfoWidget(Widget):
 
         ctx.restore()
 
+        ctx.save()
         layout.set_font_description(SMALL_FONT)
+        ctx.translate((self.width * 0.5) - (\
+                    common.context.text_bounds(layout, self.full_username, markup=True).width * 0.5), self.height - 50)
+        common.context.text(ctx, layout, self.full_username, markup=True)
+        ctx.restore()
 
         ctx.save()
         ctx.translate(10, 65) 
+        layout.set_font_description(SMALL_FONT)
         common.context.text(ctx, layout, f"processes:")
         ctx.move_to(120, 0)
         layout.set_font_description(SMALL_BOLD_FONT)
@@ -193,10 +208,4 @@ class SysInfoWidget(Widget):
         ctx.fill()
         ctx.restore()
 
-        ctx.save()
-        layout.set_font_description(SMALL_FONT)
-        ctx.move_to((self.width * 0.5) - (\
-                    common.context.text_bounds(layout, self.full_username, markup=True).width * 0.5), self.height - 50)
-        common.context.text(ctx, layout, self.full_username, markup=True)
-        ctx.restore()
 

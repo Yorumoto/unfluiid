@@ -27,15 +27,8 @@ def text_bounds(layout, text="hello", markup=False):
     return layout.get_pixel_size()
 
 def text(context, layout, text="hello", markup=False):
-    context.save()
     set_layout(layout, text, markup)
-    PangoCairo.update_layout(context, layout)
-    # TODO: pls help, it lowers down a little bit when it comes to unicode
-    # w, h = layout.get_size()
-    # context.move_to(-(w / PANGO_REDUCE) * 0.5, 0)
     PangoCairo.show_layout(context, layout)
-
-    context.restore()
 
 def rounded_rectangle(context, x, y, width, height, radius=25):
     # if isinstance(radius, int):
