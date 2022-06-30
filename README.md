@@ -1,7 +1,7 @@
 # unfluiid
 *version 1 :)*
 
-![insert image here]()
+![my animated desktop](scr.png)
 
 A rice where I reinvented the wheel (polybar, bar, eww, rofi, dunst, and maybe awesome) just for cool transitions. 
 
