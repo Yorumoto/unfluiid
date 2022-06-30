@@ -30,7 +30,15 @@ Each package's usage:
 - **pycairo** | rendering the rice
 - **pydbus** | suspend/sleeping events
 
-2. In your window manager's configs, ...
+2. In your window manager's configs, bind those keybinds to launch unfluiid with the following options:
+- bar
+- search
+- dashboard
+- powermenu
+- screenflash (suitable for letting your desktop go on an suspended state)
+
+Example:
+`.../unfluiid bar`
 
 ### Known Issues
 - The window title seems to overlap when on a screen resolution apparently smaller than 1920x1080, especially if you have many workspaces open.
