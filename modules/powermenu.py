@@ -269,7 +269,7 @@ class Main(Looper):
     def run_command(self):
         try:
             command = self.commands[self.command_type]
-            subprocess.Popen(['nohup'] + command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
         except KeyError:
             pass
 

@@ -48,7 +48,7 @@ class HorizonTime:
     def parse_strf(strf_time):
         return datetime.datetime.strptime(strf_time, '%I:%M %p').time()
 
-REFRESH_WEATHER_CACHE_DELAY = 60 * 5
+REFRESH_WEATHER_CACHE_DELAY = 60 * 30
 
 class WeatherWidget(Widget):
     background_color = (161/255, 81/255, 70/255)
@@ -106,7 +106,7 @@ class WeatherWidget(Widget):
             print(f'failed to get weather data: {e}')
 
     def __init__(self):
-        super().__init__(y=305, width=350, height=275)
+        super().__init__(y=315, width=350, height=265)
         
         self.weather_data = None
         self.loaded = False

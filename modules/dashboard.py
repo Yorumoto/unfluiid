@@ -10,6 +10,8 @@ from modules.dashboard_modules.util import mouse_hovering
 from modules.dashboard_modules.sysinfo import SysInfoWidget
 from modules.dashboard_modules.calendar import CalendarWidget
 from modules.dashboard_modules.weather import WeatherWidget
+from modules.dashboard_modules.visualizer import VisualizerWidget
+from modules.dashboard_modules.select import SelectWidget
 
 import common.context
 import pytweening
@@ -37,10 +39,11 @@ class Main(Looper):
         self._ft = 0
         self.full_screen_timer = 0
 
-        self.widgets = [SysInfoWidget(), WeatherWidget(), CalendarWidget()]
+        self.widgets = [SysInfoWidget(), WeatherWidget(), CalendarWidget(), VisualizerWidget(), SelectWidget()]
 
         for i, widget in enumerate(self.widgets):
-            # widget.appearance_timer = 0
+            widget.main_widget = self
+            widget._at = 0
             widget.appearance_del_timer = i * 0.0625
 
         self.x = 0
@@ -48,6 +51,9 @@ class Main(Looper):
         self.width = 1000
         self.height = 600
         self.padding = 10
+
+        self._at = 0
+        self.appearance_timer = 0
 
         self.can_draw_widgets = False
         
@@ -58,14 +64,23 @@ class Main(Looper):
         self.zoomed_widget = None
         self.layout = None
 
+        self.before_final_quit_timer = 0.2
+        self.quiting = False
+
         self.loop_init()
+
+    def quit(self):
+        if self.quiting:
+            return
+
+        self.quiting = True
 
     def on_key_press(self, _, event):
         if event.hardware_keycode == 9:
             if self.zoomed_widget:
                 self.zoomed_widget = None
             else:
-                Gtk.main_quit()
+                self.quit()
 
             return
 
@@ -104,11 +119,15 @@ class Main(Looper):
         # self
         self.x = (width * 0.5) - (self.width * 0.5)
         self.y = (height * 0.5) - (self.height * 0.5)
+        
+        dx = self.x - ((1 - self.appearance_timer) * 400)
+        dy = self.y
 
-        ctx.set_source_rgba(0.175, 0.15, 0.15, 1)
-        common.context.rounded_rectangle(ctx, self.x, self.y, self.width, self.height, 30)
+        ctx.set_source_rgba(0.175, 0.15, 0.15, self.appearance_timer)
+        common.context.rounded_rectangle(ctx, dx, dy, self.width, self.height, 30)
         ctx.fill()
-        common.context.rounded_shadow(ctx, self.x, self.y, self.width, self.height, depth_by=10, color=(0.15, 0.15, 0.12), width_offset=10, height_offset=10)
+        common.context.rounded_shadow(ctx, dx, dy, self.width, self.height, depth_by=10, color=(0.15, 0.15, 0.12), width_offset=10, height_offset=10, \
+                global_alpha=self.appearance_timer)
         
         # widgets
         if self.can_draw_widgets:
@@ -128,6 +147,9 @@ class Main(Looper):
     
     def update(self, dt):
         # update variables
+        self._at = max(min(self._at + (dt * (-6 if self.quiting else 6)), 1), 0)
+        self.appearance_timer = pytweening.easeOutQuad(self._at)
+
         self.global_alpha = pytweening.easeInOutQuad(1 - self._ga)
 
         # position widgets
@@ -148,7 +170,7 @@ class Main(Looper):
             widget._zt = max(min(widget._zt + dt * (-4 + (self.zoomed_widget is widget) * 8), 1), 0)
             
             if widget.appearance_del_timer <= 0:
-                widget._at = min(widget._at + dt * 4, 1)
+                widget._at = max(min(widget._at + dt * (-4 if self.quiting else 4), 1), 0)
             else:
                 widget.appearance_del_timer -= dt
 
@@ -160,3 +182,13 @@ class Main(Looper):
 
         # update widgets
         self.main_animator.draw()
+        
+        if self._at <= 0 and self.quiting:
+            if self.before_final_quit_timer <= 0:
+                for widget in self.widgets:
+                    widget.on_quit()
+
+                Gtk.main_quit()
+            else:
+                self.before_final_quit_timer -= dt
+            

@@ -15,6 +15,8 @@ class Widget:
     background_color = (1, 1, 1)
 
     def __init__(self, x=0, y=0, width=200, height=200):
+        self.main_widget = None
+
         self.start_x = x
         self.start_y = y
         self.start_width = width
@@ -40,10 +42,13 @@ class Widget:
         self.appearance_del_timer = 0
 
         self.alpha = 1
-
+        
         self.colliding = False
         self.holding = False
         self.hold_since = 0
+
+    def on_quit(self):
+        pass
 
     def on_press(self, press_time):
         self.hold_since = press_time
@@ -69,10 +74,13 @@ class Widget:
     def draw_widget(self, ctx, layout):
         pass
 
-    def draw(self, ctx, layout):
+    def draw_background(self, ctx):
         ctx.set_source_rgba(*self.background_color, self.alpha)
         common.context.rounded_rectangle(ctx, self.x, self.y, self.width, self.height)
         ctx.fill()
+
+    def draw(self, ctx, layout):
+        self.draw_background(ctx)
         
         ctx.save()
         ctx.translate(self.x + self.padding, self.y + self.padding)
