@@ -624,7 +624,7 @@ class DMenu(EntryMenu):
         self.current_state.finish_search()
 
 class Main(Looper):
-    def __init__(self):
+    def __init__(self, in_execute_shell):
         super().__init__()
 
         self._ct = 0 # cursor blink timer
@@ -649,10 +649,11 @@ class Main(Looper):
         self.window.connect('key_press_event', self.on_key_press)
         self.window.grab(no_pointer=True)
      
-        self.current_state.current_menu = self.dmenu
-
+        # support > 2 items? few lines below kinda messy to deal with
+        self.current_state.current_menu = self.shell_menu if in_execute_shell else self.dmenu
         self.menus = [self.dmenu, self.shell_menu]
-        self._mst = DeltaTween(target=0)
+
+        self._mst = DeltaTween(start=0, target=1 * in_execute_shell)
 
         # self.autostart_search_timer = 1
         self.menu_alpha_inited = False

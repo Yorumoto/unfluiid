@@ -2,12 +2,12 @@ import pytweening
 
 class DeltaTween:
     def __init__(self, target=1, start=0, tween_style=pytweening.easeInOutQuad):
-        self._c = 0 # current
+        self._c = start # current
         self._d = 1 # difference
         self._t = 0 # time (0-1)
-        self._s = 0 # start
+        self._s = start # start
         self._i = False # inited
-        
+ 
         if start != target:
             self.change_target(target)
 

@@ -48,3 +48,5 @@ Example:
 - Search application requires the i3-sensible-terminal for lazy terminal application launching. For now, install the application from somewhere.
 
 - Positioning issue when unicode characters are shown. (Can be done in the window title by just going to a website with CJK characters on the title)
+
+- Sometimes the application just freezes (mostly due to an error outputting invisibly), access and log in to a tty (Ctrl+Fx, one of them should turn your back to the environment), then run `killall unfluiid`, and then go back to your graphical environment.

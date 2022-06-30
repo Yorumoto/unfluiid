@@ -20,7 +20,8 @@ def main():
         modules.dashboard.Main()
     elif mode == 'search':
         import modules.search
-        modules.search.Main()
+        execute = len(sys.argv) > 2 and sys.argv[2] == 'execute_shell'
+        modules.search.Main(execute)
     # elif mode == "notification":
     #    modules.notification.Main()
     elif mode == 'powermenu':

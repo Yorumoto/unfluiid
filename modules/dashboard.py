@@ -82,7 +82,12 @@ class Main(Looper):
             else:
                 self.quit()
 
-            return
+            return True
+
+        for widget in self.widgets:
+            widget.on_key_press(event)
+
+        return True
 
     def on_press(self, _, event):
         if not self.mouse_pressing:
@@ -148,6 +153,16 @@ class Main(Looper):
     def update(self, dt):
         # update variables
         self._at = max(min(self._at + (dt * (-6 if self.quiting else 6)), 1), 0)
+        
+        if self._at <= 0 and self.quiting:
+            if self.before_final_quit_timer <= 0:
+                for widget in self.widgets:
+                    widget.on_quit()
+
+                Gtk.main_quit()
+            else:
+                self.before_final_quit_timer -= dt
+
         self.appearance_timer = pytweening.easeOutQuad(self._at)
 
         self.global_alpha = pytweening.easeInOutQuad(1 - self._ga)
@@ -181,14 +196,4 @@ class Main(Looper):
             widget.update(dt, self.global_alpha * (1 if (self.zoomed_widget is None or self.zoomed_widget is widget) else (1 - self.zoomed_widget.zoom_timer)))
 
         # update widgets
-        self.main_animator.draw()
-        
-        if self._at <= 0 and self.quiting:
-            if self.before_final_quit_timer <= 0:
-                for widget in self.widgets:
-                    widget.on_quit()
-
-                Gtk.main_quit()
-            else:
-                self.before_final_quit_timer -= dt
-            
+        self.main_animator.draw()  

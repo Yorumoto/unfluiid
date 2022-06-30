@@ -50,6 +50,9 @@ class Widget:
     def on_quit(self):
         pass
 
+    def on_key_press(self, event):
+        pass
+
     def on_press(self, press_time):
         self.hold_since = press_time
         self.holding = self.colliding and not self.no_zoom
