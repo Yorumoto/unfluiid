@@ -11,7 +11,7 @@ The code is mid messy, so forking will be a pain in the ass, so it's rather a sh
 You'll need an i3wm/sway desktop environment, because it uses the i3ipc dependency for displaying the window titles and workspaces.
 
 1. Install some fonts.
-- [https://github.com/ryanoasis/nerd-fonts/blob/master/patched-fonts/Iosevka/Regular/complete/Iosevka%20Term%20Nerd%20Font%20Complete%20Mono.ttf](Iosevka Term Nerd Font Complete Mono)
+- [Iosevka Term Nerd Font Complete Mono](https://github.com/ryanoasis/nerd-fonts/blob/master/patched-fonts/Iosevka/Regular/complete/Iosevka%20Term%20Nerd%20Font%20Complete%20Mono.ttf)
 
 2. Install some dependencies for some pip packages (some names will be different depending on your distro; in this case, below will be Arch Linux)
 ```
