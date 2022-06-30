@@ -30,7 +30,7 @@ Each package's usage:
 - **pycairo** | rendering the rice
 - **pydbus** | suspend/sleeping events
 
-4. In your window manager's configs, bind those keybinds to launch unfluiid with the following options:
+4. In your window manager's configs, bind those keybinds to launch unfluiid with the following options without giving a startup id:
 - bar
 - search
 - dashboard

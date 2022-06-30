@@ -68,7 +68,7 @@ class SelectWidget(Widget):
 
     def on_quit(self):
         if not self.entered:
-            pass
+            return
 
         self.choices[self.select_index].execute()
 

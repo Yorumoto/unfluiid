@@ -7,13 +7,13 @@ class DatabaseItem:
 # hopefully this is accurate
 MoonCodeDatabase = {
     'New Moon': '',
-    'Waxing Crescent': ' ',
+    'Waxing Crescent': '',
     'First Quarter': '',
-    'Waxing Gibbous': ' ',
+    'Waxing Gibbous': ' ',
     'Full Moon': '',
-    'Waning Gibbous': ' ',
+    'Waning Gibbous': '',
     'Last Quarter': '',
-    'Waning Crescent': ' ',
+    'Waning Crescent': '',
 }
 
 WeatherCodeDatabase = {

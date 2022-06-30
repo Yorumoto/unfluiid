@@ -49,7 +49,9 @@ class VisualizerWidget(Widget):
         
         ctx.set_line_width(10)
         
-        bar_len = self.volume_percentage // 10
+        percentage_clamped = min(self.volume_percentage, 150)
+
+        bar_len = percentage_clamped // 10
 
         for i in range(bar_len):
             x = 15 + (i * 25)
@@ -57,10 +59,10 @@ class VisualizerWidget(Widget):
             ctx.line_to(x + 20, 45)
             ctx.stroke()
 
-        if bar_len != self.volume_percentage / 10:
+        if bar_len != percentage_clamped / 10:
             x = 15 + (bar_len * 25)
             ctx.move_to(x, 45)
-            ctx.line_to(x + 20 * ((self.volume_percentage / 10) - bar_len), 45)
+            ctx.line_to(x + 20 * ((percentage_clamped / 10) - bar_len), 45)
             ctx.stroke()
 
         ctx.move_to(0, 0)

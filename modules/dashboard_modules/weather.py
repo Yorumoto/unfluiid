@@ -90,7 +90,8 @@ class WeatherWidget(Widget):
             sun_horizon.set = HorizonTime.parse_strf(horizon_data['sunset'])
             
             moon_phase = DatabaseItem(horizon_data['moon_phase'].lower(), 
-                    MoonCodeDatabase.get(horizon_data['moon_phase'])[int(horizon_data['moon_illumination'])])
+                    MoonCodeDatabase.get(horizon_data['moon_phase']))
+
             moon_phase.illumination = int(horizon_data['moon_illumination'])
             
             self.weather_data = WeatherData()
