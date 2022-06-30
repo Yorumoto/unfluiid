@@ -18,7 +18,7 @@ You'll need an i3wm/sway desktop environment, because it uses the i3ipc dependen
 gtk3 portaudio
 ```
 
-2. Install some pip packages
+3. Install some pip packages
 ```
 i3ipc python-xlib pygi pycairo pydbus sounddevice
 ```
@@ -30,7 +30,7 @@ Each package's usage:
 - **pycairo** | rendering the rice
 - **pydbus** | suspend/sleeping events
 
-2. In your window manager's configs, bind those keybinds to launch unfluiid with the following options:
+4. In your window manager's configs, bind those keybinds to launch unfluiid with the following options:
 - bar
 - search
 - dashboard
