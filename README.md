@@ -15,20 +15,13 @@ You'll need an i3wm/sway desktop environment, because it uses the i3ipc dependen
 
 2. Install some dependencies for some pip packages (some names will be different depending on your distro; in this case, below will be Arch Linux)
 ```
-gtk3 portaudio
+gtk3 portaudio cairo
 ```
 
-3. Install some pip packages
+3. Install pip packages
 ```
-i3ipc python-xlib pygi pycairo pydbus sounddevice
+pip install -r requirements.txt
 ```
-
-Each package's usage:
-- **i3ipc** | used for workspaces and window titles
-- **python-xlib** | some x11 magic possible (for making windows floating top tier like rofi and eww dashboard)
-- **pygi** | gobject bindings for python
-- **pycairo** | rendering the rice
-- **pydbus** | suspend/sleeping events
 
 4. In your window manager's configs, bind those keybinds to launch unfluiid with the following options without giving a startup id:
 - bar
@@ -45,8 +38,8 @@ Example:
 
 - The workspaces section seems to freeze after an i3 configuration reload
 
-- Search application requires the i3-sensible-terminal for lazy terminal application launching. For now, install the application from somewhere.
+- Search application requires the i3-sensible-terminal for lazy terminal application launching.
 
 - Positioning issue when unicode characters are shown. (Can be done in the window title by just going to a website with CJK characters on the title)
 
-- Sometimes the application just freezes (mostly due to an error outputting invisibly), access and log in to a tty (Ctrl+Fx, one of them should turn your back to the environment), then run `killall unfluiid`, and then go back to your graphical environment.
+- Sometimes the application just freezes (mostly due to an error outputting invisibly), access and log in to a tty (Ctrl+Fx, one of them should turn you back to your graphical environment), then run `killall unfluiid`, and then go back to your graphical environment.
