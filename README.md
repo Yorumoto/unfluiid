@@ -33,6 +33,8 @@ pip install -r requirements.txt
 Example:
 `.../unfluiid bar`
 
+If you also want to interact with your tray (which unfluiid doesn't mainly have), by configuration too, you can autolaunch the `launch.sh` in the `polybar_tray` folder.
+
 ### Known Issues
 - The window title seems to overlap when on a screen resolution apparently smaller than 1920x1080, especially if you have many workspaces open.
 
