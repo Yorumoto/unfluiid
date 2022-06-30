@@ -154,9 +154,9 @@ class Main(Looper):
 
             widget.appearance_timer = pytweening.easeOutQuad(widget._at)
              
-            widget.zoom_timer = pytweening.easeInOutQuad(widget._zt)
+            widget.zoom_timer = pytweening.easeOutQuad(widget._zt)
 
-            widget.update(dt, self.global_alpha)
+            widget.update(dt, self.global_alpha * (1 if (self.zoomed_widget is None or self.zoomed_widget is widget) else (1 - self.zoomed_widget.zoom_timer)))
 
         # update widgets
         self.main_animator.draw()

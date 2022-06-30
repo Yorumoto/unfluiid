@@ -162,7 +162,7 @@ class SysInfoWidget(Widget):
         ctx.restore()
 
     def draw_widget(self, ctx, layout):
-        ctx.set_source_rgb(0, 0, 0)
+        ctx.set_source_rgba(0, 0, 0, self.alpha)
 
         ctx.save()
 

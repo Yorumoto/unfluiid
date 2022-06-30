@@ -3,6 +3,19 @@ class DatabaseItem:
         self.name = name
         self.icon = icon
 
+
+# hopefully this is accurate
+MoonCodeDatabase = {
+    'New Moon': '',
+    'Waxing Crescent': ' ',
+    'First Quarter': '',
+    'Waxing Gibbous': ' ',
+    'Full Moon': '',
+    'Waning Gibbous': ' ',
+    'Last Quarter': '',
+    'Waning Crescent': ' ',
+}
+
 WeatherCodeDatabase = {
     113: DatabaseItem('sunny', ''),
     116: DatabaseItem('partly cloudy', ''),
