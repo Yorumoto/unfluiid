@@ -227,7 +227,7 @@ class Main:
         
         text_tt = pytweening.easeOutQuad((1 - self._tt) if self._tt <= 1 else (self._tt - 1))
 
-        context.set_source_rgba(0.2, 0.1, 0.3, 0.75 * (_lvtr * 0.5) * text_tt)
+        context.set_source_rgba(0.2, 0.1, 0.3, 0.75 * (_lvtr) * text_tt)
         
         context.set_font_size(20)
 

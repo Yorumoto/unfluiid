@@ -18,7 +18,7 @@ class Bar:
         self._x = x - self._bar_width
         self._h = height
 
-        ctx.set_source_rgba(0.2, 0.1, 0.3, 0.25)
+        ctx.set_source_rgba(0.2, 0.1, 0.3, 0.75)
         common.context.rounded_rectangle(ctx, self._x, 0, self._bar_width, height, height * 0.5)
         ctx.fill()
 
